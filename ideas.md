@@ -11,6 +11,7 @@ Parameters that affect flight cost:
 
 Kaggle example: https://www.kaggle.com/datasets/shubhambathwal/flight-price-prediction/data
 Note that they use octoparse[https://www.octoparse.com/] and EaseMyTrip[https://www.easemytrip.us/] for the data
+[(https://developers.amadeus.com/self-service/apis-docs/guides/developer-guides/quick-start/)]
 
 Architecture ideas:
 - neural network?
