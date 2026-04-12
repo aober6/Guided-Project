@@ -7,6 +7,7 @@ Parameters that affect flight cost:
 - Total Number of Stops
 - Previous flight prices
 - Departure/Arrival Time?
+- 
 
 
 Kaggle example: https://www.kaggle.com/datasets/shubhambathwal/flight-price-prediction/data

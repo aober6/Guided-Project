@@ -1,0 +1,36 @@
+# Virtual environment
+.venv/
+
+# Data files (too large for git)
+data/
+*.csv
+*.parquet
+*.pkl
+*.h5
+*.hdf5
+
+# Kaggle cache
+~/.cache/kagglehub/
+
+# Results / model artifacts
+results/*.pkl
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env files
+.env
+*.env
