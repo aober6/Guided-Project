@@ -109,29 +109,43 @@ Metrics are computed on the held-out test set (last 20% of data by date):
 
 ## Running the Project
 
-### Setup
+### 1. Install dependencies
 ```bash
-uv add kagglehub pandas numpy scikit-learn xgboost matplotlib seaborn tabulate
+uv add kagglehub pandas numpy scikit-learn xgboost matplotlib seaborn tabulate optuna
 ```
 
-### Download data
-```bash
-uv run python data.py
-```
+### 2. Preprocess (500k row sample — fast, for iteration)
 
-### Preprocess (500k row sample)
+The dataset is downloaded automatically via `kagglehub` on first run (~5.9 GB).
+A Kaggle account is required. Run `kaggle` login or set `KAGGLE_USERNAME` / `KAGGLE_KEY` env vars.
+
 ```bash
 uv run python preprocess.py
 ```
 
-### Preprocess (full dataset)
+### 2a. Preprocess (full ~6M row dataset)
+
+**PowerShell:**
+```powershell
+$env:FULL_DATA=1; uv run python preprocess.py
+```
+
+**bash/zsh (Mac/Linux):**
 ```bash
 FULL_DATA=1 uv run python preprocess.py
 ```
 
-### Train
+### 3. Train baseline model
 ```bash
 uv run python train_model.py
+```
+
+### 4. Hyperparameter tuning (50 Optuna trials, ~10-15 min)
+
+Finds optimal XGBoost hyperparameters via Bayesian search, then retrains and evaluates the tuned model.
+
+```bash
+uv run python tune_model.py
 ```
 
 ---
@@ -139,17 +153,18 @@ uv run python train_model.py
 ## Results
 
 After training, outputs are saved to `results/`:
-- `xgboost_model.pkl` — saved model
-- `feature_importance.png` — XGBoost feature importance scores
+- `xgboost_model.pkl` — baseline model
+- `xgboost_tuned.pkl` — hyperparameter-tuned model
+- `best_params.json` — best hyperparameters found by Optuna
+- `feature_importance.png` / `feature_importance_tuned.png` — feature importance plots
 - `pred_vs_actual.png` — predicted vs actual fare scatter plot
-- `model_results.md` — full metrics and feature importance table
+- `optuna_history.png` — Optuna optimization history
+- `model_results.md` — full metrics comparison (baseline vs tuned)
 
 ---
 
 ## Next Steps
 
-- Train on the full 6M-row dataset (`FULL_DATA=1`)
-- Hyperparameter tuning (learning rate, depth, number of estimators)
 - Add departure hour as a feature (parse from `segmentsDepartureTimeRaw`)
 - Target-encode `startingAirport` + `destinationAirport` as a combined route feature
 - Experiment with LightGBM (often faster and slightly better on high-cardinality categoricals)

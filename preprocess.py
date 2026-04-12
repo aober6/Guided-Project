@@ -12,10 +12,12 @@ import os
 import re
 import numpy as np
 import pandas as pd
+import kagglehub
 from sklearn.preprocessing import LabelEncoder
 
-CSV_PATH = r"C:\Users\ishur\.cache\kagglehub\datasets\dilwong\flightprices\versions\1\itineraries.csv"
 DATA_DIR = "data"
+_dataset_path = kagglehub.dataset_download("dilwong/flightprices")
+CSV_PATH = os.path.join(_dataset_path, "itineraries.csv")
 os.makedirs(DATA_DIR, exist_ok=True)
 
 TARGET = "totalFare"
