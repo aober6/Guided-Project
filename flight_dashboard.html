@@ -1,0 +1,1090 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>FlightLens — Chicago Flight Price Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&family=Syne:wght@600&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: #f5f4f0;
+      color: #1a1a18;
+      min-height: 100vh;
+    }
+
+    /* ── Top nav ── */
+    .navbar {
+      background: #fff;
+      border-bottom: 0.5px solid rgba(0,0,0,0.1);
+      padding: 0 2rem;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .brand {
+      font-family: 'Syne', sans-serif;
+      font-size: 20px;
+      color: #1a1a18;
+      letter-spacing: -0.5px;
+    }
+    .brand span { color: #1D9E75; }
+    .nav-tag {
+      font-size: 12px;
+      color: #888;
+      background: #f1f0ec;
+      padding: 4px 10px;
+      border-radius: 99px;
+    }
+
+    /* ── Main layout ── */
+    .main { padding: 1.5rem 2rem 3rem; max-width: 1200px; margin: 0 auto; }
+
+    /* ── Route selector bar ── */
+    .route-bar {
+      background: #fff;
+      border: 0.5px solid rgba(0,0,0,0.1);
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 1.25rem;
+    }
+    .route-bar label {
+      font-size: 12px;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .sel {
+      height: 36px;
+      padding: 0 12px;
+      border-radius: 8px;
+      border: 0.5px solid rgba(0,0,0,0.15);
+      background: #fafaf8;
+      color: #1a1a18;
+      font-size: 13px;
+      font-family: 'DM Sans', sans-serif;
+      cursor: pointer;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .sel:focus { border-color: #1D9E75; }
+    .arrow-icon {
+      font-size: 18px;
+      color: #bbb;
+      flex-shrink: 0;
+    }
+    .btn-analyze {
+      height: 36px;
+      padding: 0 20px;
+      background: #1D9E75;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+      margin-left: auto;
+    }
+    .btn-analyze:hover { background: #0F6E56; }
+    .btn-analyze:active { transform: scale(0.97); }
+
+    /* ── Metric cards ── */
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 1.25rem;
+    }
+    .metric {
+      background: #fff;
+      border: 0.5px solid rgba(0,0,0,0.08);
+      border-radius: 10px;
+      padding: 16px 18px;
+      transition: box-shadow 0.15s;
+    }
+    .metric:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+    .metric-label {
+      font-size: 11px;
+      color: #999;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+    .metric-value {
+      font-size: 24px;
+      font-weight: 500;
+      color: #1a1a18;
+      line-height: 1.1;
+    }
+    .metric-value.good { color: #0F6E56; }
+    .metric-value.warn { color: #854F0B; }
+    .metric-sub {
+      font-size: 11px;
+      color: #aaa;
+      margin-top: 5px;
+    }
+
+    /* ── Two-column panels ── */
+    .panels {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    /* ── Cards ── */
+    .card {
+      background: #fff;
+      border: 0.5px solid rgba(0,0,0,0.08);
+      border-radius: 12px;
+      padding: 1.25rem 1.5rem;
+    }
+    .card-title {
+      font-size: 12px;
+      font-weight: 500;
+      color: #999;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 1rem;
+    }
+
+    /* ── Bottom panels ── */
+    .bottom-panels {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    /* ── Fare chart ── */
+    .chart-wrap {
+      position: relative;
+      width: 100%;
+      height: 240px;
+    }
+
+    /* ── Airline list ── */
+    .airline-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 9px 0;
+      border-bottom: 0.5px solid rgba(0,0,0,0.06);
+    }
+    .airline-row:last-child { border-bottom: none; }
+    .airline-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      margin-right: 10px;
+      flex-shrink: 0;
+    }
+    .airline-name { font-size: 13px; color: #1a1a18; display: flex; align-items: center; }
+    .badge {
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 500;
+      padding: 3px 10px;
+      border-radius: 99px;
+    }
+    .badge-green { background: #E1F5EE; color: #0F6E56; }
+    .badge-amber { background: #FAEEDA; color: #854F0B; }
+    .badge-red   { background: #FCEBEB; color: #A32D2D; }
+
+    /* ── Heatmap ── */
+    .heatmap-grid {
+      display: grid;
+      grid-template-columns: 44px repeat(7, 1fr);
+      gap: 3px;
+      font-size: 10px;
+    }
+    .hm-label {
+      color: #aaa;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+    }
+    .hm-label.row-label {
+      justify-content: flex-end;
+      padding-right: 6px;
+      font-size: 10px;
+    }
+    .hm-cell {
+      height: 30px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 500;
+      transition: transform 0.1s;
+      cursor: default;
+    }
+    .hm-cell:hover { transform: scale(1.08); z-index: 2; position: relative; }
+
+    /* ── Tips panel ── */
+    .tip-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 11px 0;
+      border-bottom: 0.5px solid rgba(0,0,0,0.06);
+    }
+    .tip-row:last-child { border-bottom: none; }
+    .tip-icon {
+      width: 30px; height: 30px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+    .tip-icon.green { background: #E1F5EE; }
+    .tip-icon.amber { background: #FAEEDA; }
+    .tip-icon.blue  { background: #E6F1FB; }
+    .tip-icon.red   { background: #FCEBEB; }
+    .tip-text {
+      font-size: 12.5px;
+      color: #666;
+      line-height: 1.55;
+    }
+    .tip-text strong { color: #1a1a18; font-weight: 500; }
+
+    /* ── Legend ── */
+    .legend {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: #888;
+    }
+    .legend-sq {
+      width: 10px; height: 10px;
+      border-radius: 2px;
+    }
+
+    /* ── Live price panel ── */
+    .live-panel {
+      background: #fff;
+      border: 0.5px solid rgba(0,0,0,0.08);
+      border-radius: 12px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 12px;
+    }
+    .live-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 1rem;
+    }
+    .live-title {
+      font-size: 12px;
+      font-weight: 500;
+      color: #999;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .live-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: #1D9E75;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+    .live-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .date-input {
+      height: 34px;
+      padding: 0 10px;
+      border-radius: 8px;
+      border: 0.5px solid rgba(0,0,0,0.15);
+      background: #fafaf8;
+      color: #1a1a18;
+      font-size: 13px;
+      font-family: 'DM Sans', sans-serif;
+      outline: none;
+    }
+    .date-input:focus { border-color: #1D9E75; }
+    .btn-live {
+      height: 34px;
+      padding: 0 18px;
+      background: #1a1a18;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+      white-space: nowrap;
+    }
+    .btn-live:hover { background: #333; }
+    .btn-live:active { transform: scale(0.97); }
+    .btn-live:disabled { background: #ccc; cursor: not-allowed; }
+    .live-results {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 10px;
+    }
+    .live-card {
+      border: 0.5px solid rgba(0,0,0,0.08);
+      border-radius: 10px;
+      padding: 12px 14px;
+      background: #fafaf8;
+      transition: box-shadow 0.15s;
+    }
+    .live-card:hover { box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
+    .live-card-airline {
+      font-size: 12px;
+      font-weight: 500;
+      color: #1a1a18;
+      margin-bottom: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .live-card-price {
+      font-size: 22px;
+      font-weight: 500;
+      color: #1D9E75;
+      margin-bottom: 4px;
+    }
+    .live-card-detail {
+      font-size: 11px;
+      color: #aaa;
+      line-height: 1.5;
+    }
+    .live-card-stops {
+      display: inline-block;
+      font-size: 10px;
+      padding: 2px 7px;
+      border-radius: 99px;
+      background: #E1F5EE;
+      color: #0F6E56;
+      margin-top: 4px;
+      font-weight: 500;
+    }
+    .live-card-stops.has-stops {
+      background: #FAEEDA;
+      color: #854F0B;
+    }
+    .live-compare {
+      margin-top: 10px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+    .live-compare.good { background: #E1F5EE; color: #0F6E56; }
+    .live-compare.warn { background: #FAEEDA; color: #854F0B; }
+    .live-compare.neutral { background: #f1f0ec; color: #666; }
+    .live-empty {
+      font-size: 13px;
+      color: #aaa;
+      text-align: center;
+      padding: 1.5rem 0;
+    }
+    .live-error {
+      font-size: 13px;
+      color: #A32D2D;
+      background: #FCEBEB;
+      border-radius: 8px;
+      padding: 10px 14px;
+    }
+    .spinner {
+      display: inline-block;
+      width: 16px; height: 16px;
+      border: 2px solid rgba(29,158,117,0.2);
+      border-top-color: #1D9E75;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Responsive ── */
+    @media (max-width: 900px) {
+      .panels, .bottom-panels { grid-template-columns: 1fr; }
+      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 520px) {
+      .main { padding: 1rem; }
+      .metrics { grid-template-columns: 1fr 1fr; }
+      .navbar { padding: 0 1rem; }
+      .route-bar { flex-direction: column; align-items: flex-start; }
+      .btn-analyze { margin-left: 0; width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+<nav class="navbar">
+  <div class="brand">flight<span>lens</span></div>
+  <div class="nav-tag">Chicago Flight Price Analyzer</div>
+</nav>
+
+<main class="main">
+
+  <!-- Route selector -->
+  <div class="route-bar">
+    <label>From</label>
+    <select class="sel" id="originSel">
+      <option value="LAX">LAX — Los Angeles</option>
+      <option value="JFK">JFK — New York</option>
+      <option value="MIA">MIA — Miami</option>
+      <option value="SFO">SFO — San Francisco</option>
+      <option value="BOS">BOS — Boston</option>
+      <option value="ATL">ATL — Atlanta</option>
+      <option value="DFW">DFW — Dallas</option>
+      <option value="DEN">DEN — Denver</option>
+      <option value="EWR">EWR — Newark</option>
+      <option value="PHL">PHL — Philadelphia</option>
+      <option value="DTW">DTW — Detroit</option>
+      <option value="LGA">LGA — New York (LaGuardia)</option>
+      <option value="IAD">IAD — Washington D.C.</option>
+      <option value="OAK">OAK — Oakland</option>
+      <option value="CLT">CLT — Charlotte</option>
+    </select>
+    <span class="arrow-icon">⇄</span>
+    <label>To/From</label>
+    <select class="sel" style="background:#E1F5EE; color:#0F6E56; border-color:#9FE1CB;" disabled>
+      <option>ORD — Chicago O'Hare</option>
+    </select>
+    <select class="sel" id="dirSel">
+      <option value="both">Both directions</option>
+      <option value="to">To Chicago only</option>
+      <option value="from">From Chicago only</option>
+    </select>
+    <button class="btn-analyze" onclick="updateDashboard()">Analyze route</button>
+  </div>
+
+  <!-- Metric cards -->
+  <div class="metrics">
+    <div class="metric">
+      <div class="metric-label">Avg. total fare</div>
+      <div class="metric-value" id="m-avgfare">$287</div>
+      <div class="metric-sub" id="m-route">LAX ↔ ORD</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Best booking window</div>
+      <div class="metric-value good" id="m-window">21–35 days</div>
+      <div class="metric-sub">before departure</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Cheapest day to fly</div>
+      <div class="metric-value good" id="m-day">Tuesday</div>
+      <div class="metric-sub" id="m-dayfare">avg. $241</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Cheapest month</div>
+      <div class="metric-value warn" id="m-month">September</div>
+      <div class="metric-sub" id="m-monthfare">avg. $254</div>
+    </div>
+  </div>
+
+  <!-- Main panels -->
+  <div class="panels">
+    <!-- Fare curve chart -->
+    <div class="card">
+      <div class="card-title" id="chartTitle">Avg. fare vs. days booked in advance — LAX → ORD</div>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-sq" style="background:#1D9E75;"></div>Avg. fare</div>
+        <div class="legend-item"><div class="legend-sq" style="background:#9FE1CB;border:1.5px dashed #1D9E75;"></div>Sweet spot (best window)</div>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="fareChart" role="img" aria-label="Line chart showing average fare vs days booked in advance. Prices are highest last-minute and very far in advance, with a sweet spot around 21-35 days.">Fare is cheapest when booked 21–35 days in advance.</canvas>
+      </div>
+    </div>
+
+    <!-- Airline breakdown -->
+    <div class="card">
+      <div class="card-title">Avg. fare by airline</div>
+      <div id="airlineList"></div>
+    </div>
+  </div>
+
+  <!-- Bottom panels -->
+  <div class="bottom-panels">
+    <!-- Heatmap -->
+    <div class="card">
+      <div class="card-title">Fare heatmap — day of week × month</div>
+      <div class="heatmap-grid" id="heatmap"></div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:12px;">
+        <span style="font-size:10px;color:#aaa;">Cheaper</span>
+        <div style="flex:1;height:6px;border-radius:3px;background:linear-gradient(to right,#1D9E75,#f5f4f0,#D85A30);"></div>
+        <span style="font-size:10px;color:#aaa;">More expensive</span>
+      </div>
+    </div>
+
+    <!-- Insights -->
+    <div class="card">
+      <div class="card-title">Key insights</div>
+      <div id="insightsList"></div>
+    </div>
+  </div>
+
+
+  <!-- Live price lookup -->
+  <div class="live-panel" style="margin-top:12px;">
+    <div class="live-panel-header">
+      <div class="live-title">
+        <div class="live-dot"></div>
+        Live price lookup — Sky Scrapper API
+      </div>
+      <div class="live-controls">
+        <label style="font-size:12px;color:#999;">Departure date</label>
+        <input type="date" class="date-input" id="liveDateInput" />
+        <label style="font-size:12px;color:#999;">Cabin</label>
+        <select class="sel" id="liveCabin" style="height:34px;">
+          <option value="economy">Economy</option>
+          <option value="premium_economy">Premium Economy</option>
+          <option value="business">Business</option>
+          <option value="first">First</option>
+        </select>
+        <button class="btn-live" id="liveBtn" onclick="fetchLivePrices()">Check live prices</button>
+      </div>
+    </div>
+    <div id="liveResults">
+      <div class="live-empty">Select a departure date above and click "Check live prices" to see real-time fares for this route.</div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+// ── Route data (simulated — replace with real model output) ──
+const routeData = {
+  LAX: { avgFare: 287, window: '21–35 days', cheapDay: 'Tuesday', cheapDayFare: 241, cheapMonth: 'September', cheapMonthFare: 254,
+    fares: [389,362,341,305,248,241,255,272,291,308,334,358],
+    airlines: [
+      { name:'Spirit',    fare:189, cls:'badge-green' },
+      { name:'United',    fare:261, cls:'badge-green' },
+      { name:'American',  fare:274, cls:'badge-green' },
+      { name:'Delta',     fare:298, cls:'badge-amber' },
+      { name:'Alaska',    fare:312, cls:'badge-amber' },
+      { name:'JetBlue',   fare:341, cls:'badge-red'   },
+    ]
+  },
+  JFK: { avgFare: 312, window: '14–28 days', cheapDay: 'Wednesday', cheapDayFare: 268, cheapMonth: 'September', cheapMonthFare: 278,
+    fares: [420,395,368,330,275,268,280,295,310,325,355,390],
+    airlines: [
+      { name:'JetBlue',   fare:215, cls:'badge-green' },
+      { name:'United',    fare:289, cls:'badge-green' },
+      { name:'Delta',     fare:308, cls:'badge-amber' },
+      { name:'American',  fare:321, cls:'badge-amber' },
+      { name:'Spirit',    fare:198, cls:'badge-green' },
+      { name:'Alaska',    fare:345, cls:'badge-red'   },
+    ]
+  },
+  MIA: { avgFare: 298, window: '21–42 days', cheapDay: 'Tuesday', cheapDayFare: 252, cheapMonth: 'October', cheapMonthFare: 241,
+    fares: [405,380,355,318,260,252,265,278,298,315,340,375],
+    airlines: [
+      { name:'Spirit',    fare:178, cls:'badge-green' },
+      { name:'American',  fare:261, cls:'badge-green' },
+      { name:'United',    fare:279, cls:'badge-green' },
+      { name:'Delta',     fare:305, cls:'badge-amber' },
+      { name:'Frontier',  fare:201, cls:'badge-green' },
+      { name:'JetBlue',   fare:328, cls:'badge-red'   },
+    ]
+  },
+  SFO: { avgFare: 305, window: '28–42 days', cheapDay: 'Thursday', cheapDayFare: 261, cheapMonth: 'September', cheapMonthFare: 268,
+    fares: [410,385,362,322,268,261,270,285,305,320,348,380],
+    airlines: [
+      { name:'United',    fare:248, cls:'badge-green' },
+      { name:'Southwest', fare:225, cls:'badge-green' },
+      { name:'Delta',     fare:291, cls:'badge-green' },
+      { name:'American',  fare:315, cls:'badge-amber' },
+      { name:'Alaska',    fare:308, cls:'badge-amber' },
+      { name:'JetBlue',   fare:352, cls:'badge-red'   },
+    ]
+  },
+  BOS: { avgFare: 275, window: '14–21 days', cheapDay: 'Tuesday', cheapDayFare: 228, cheapMonth: 'October', cheapMonthFare: 235,
+    fares: [378,352,328,290,235,228,240,255,275,292,318,355],
+    airlines: [
+      { name:'JetBlue',   fare:198, cls:'badge-green' },
+      { name:'United',    fare:241, cls:'badge-green' },
+      { name:'American',  fare:258, cls:'badge-green' },
+      { name:'Delta',     fare:282, cls:'badge-amber' },
+      { name:'Spirit',    fare:172, cls:'badge-green' },
+      { name:'Alaska',    fare:315, cls:'badge-red'   },
+    ]
+  },
+  ATL: { avgFare: 241, window: '21–35 days', cheapDay: 'Wednesday', cheapDayFare: 198, cheapMonth: 'September', cheapMonthFare: 208,
+    fares: [342,318,295,258,205,198,210,225,241,258,282,315],
+    airlines: [
+      { name:'Spirit',    fare:149, cls:'badge-green' },
+      { name:'Frontier',  fare:165, cls:'badge-green' },
+      { name:'Delta',     fare:221, cls:'badge-green' },
+      { name:'United',    fare:238, cls:'badge-green' },
+      { name:'American',  fare:255, cls:'badge-amber' },
+      { name:'Southwest', fare:218, cls:'badge-green' },
+    ]
+  },
+  DFW: { avgFare: 258, window: '21–35 days', cheapDay: 'Tuesday', cheapDayFare: 212, cheapMonth: 'October', cheapMonthFare: 221,
+    fares: [358,335,312,272,218,212,225,240,258,275,298,330],
+    airlines: [
+      { name:'Spirit',    fare:162, cls:'badge-green' },
+      { name:'American',  fare:228, cls:'badge-green' },
+      { name:'United',    fare:245, cls:'badge-green' },
+      { name:'Delta',     fare:268, cls:'badge-amber' },
+      { name:'Frontier',  fare:178, cls:'badge-green' },
+      { name:'Southwest', fare:235, cls:'badge-green' },
+    ]
+  },
+  DEN: { avgFare: 268, window: '28–42 days', cheapDay: 'Tuesday', cheapDayFare: 221, cheapMonth: 'September', cheapMonthFare: 231,
+    fares: [368,345,322,282,228,221,232,248,268,285,308,342],
+    airlines: [
+      { name:'Frontier',  fare:148, cls:'badge-green' },
+      { name:'United',    fare:238, cls:'badge-green' },
+      { name:'Southwest', fare:215, cls:'badge-green' },
+      { name:'American',  fare:262, cls:'badge-amber' },
+      { name:'Delta',     fare:278, cls:'badge-amber' },
+      { name:'Spirit',    fare:171, cls:'badge-green' },
+    ]
+  },
+  EWR: { avgFare: 318, window: '14–28 days', cheapDay: 'Wednesday', cheapDayFare: 271, cheapMonth: 'October', cheapMonthFare: 282,
+    fares: [428,402,375,338,278,271,285,298,318,335,362,398],
+    airlines: [
+      { name:'United',    fare:258, cls:'badge-green' },
+      { name:'Spirit',    fare:185, cls:'badge-green' },
+      { name:'Delta',     fare:305, cls:'badge-amber' },
+      { name:'American',  fare:322, cls:'badge-amber' },
+      { name:'JetBlue',   fare:248, cls:'badge-green' },
+      { name:'Alaska',    fare:355, cls:'badge-red'   },
+    ]
+  },
+  PHL: { avgFare: 262, window: '21–35 days', cheapDay: 'Tuesday', cheapDayFare: 215, cheapMonth: 'September', cheapMonthFare: 225,
+    fares: [362,338,315,275,221,215,228,242,262,278,302,335],
+    airlines: [
+      { name:'Spirit',    fare:158, cls:'badge-green' },
+      { name:'American',  fare:235, cls:'badge-green' },
+      { name:'United',    fare:252, cls:'badge-green' },
+      { name:'Delta',     fare:275, cls:'badge-amber' },
+      { name:'Frontier',  fare:175, cls:'badge-green' },
+      { name:'JetBlue',   fare:298, cls:'badge-amber' },
+    ]
+  },
+  DTW: { avgFare: 235, window: '14–21 days', cheapDay: 'Wednesday', cheapDayFare: 188, cheapMonth: 'October', cheapMonthFare: 198,
+    fares: [335,312,288,251,195,188,200,215,235,252,275,308],
+    airlines: [
+      { name:'Spirit',    fare:142, cls:'badge-green' },
+      { name:'Delta',     fare:208, cls:'badge-green' },
+      { name:'United',    fare:225, cls:'badge-green' },
+      { name:'American',  fare:242, cls:'badge-green' },
+      { name:'Frontier',  fare:161, cls:'badge-green' },
+      { name:'Southwest', fare:215, cls:'badge-green' },
+    ]
+  },
+  LGA: { avgFare: 305, window: '14–28 days', cheapDay: 'Tuesday', cheapDayFare: 258, cheapMonth: 'September', cheapMonthFare: 268,
+    fares: [415,390,365,328,265,258,272,285,305,322,348,382],
+    airlines: [
+      { name:'Delta',     fare:245, cls:'badge-green' },
+      { name:'United',    fare:272, cls:'badge-green' },
+      { name:'American',  fare:291, cls:'badge-amber' },
+      { name:'Spirit',    fare:192, cls:'badge-green' },
+      { name:'JetBlue',   fare:228, cls:'badge-green' },
+      { name:'Alaska',    fare:335, cls:'badge-red'   },
+    ]
+  },
+  IAD: { avgFare: 272, window: '21–35 days', cheapDay: 'Wednesday', cheapDayFare: 225, cheapMonth: 'October', cheapMonthFare: 235,
+    fares: [372,348,325,285,231,225,238,252,272,288,312,345],
+    airlines: [
+      { name:'Spirit',    fare:168, cls:'badge-green' },
+      { name:'United',    fare:242, cls:'badge-green' },
+      { name:'American',  fare:258, cls:'badge-green' },
+      { name:'Delta',     fare:282, cls:'badge-amber' },
+      { name:'Frontier',  fare:182, cls:'badge-green' },
+      { name:'Southwest', fare:245, cls:'badge-green' },
+    ]
+  },
+  OAK: { avgFare: 292, window: '28–42 days', cheapDay: 'Tuesday', cheapDayFare: 245, cheapMonth: 'September', cheapMonthFare: 255,
+    fares: [395,372,348,308,252,245,258,272,292,308,335,368],
+    airlines: [
+      { name:'Southwest', fare:212, cls:'badge-green' },
+      { name:'United',    fare:258, cls:'badge-green' },
+      { name:'Alaska',    fare:275, cls:'badge-green' },
+      { name:'Delta',     fare:298, cls:'badge-amber' },
+      { name:'Spirit',    fare:178, cls:'badge-green' },
+      { name:'American',  fare:318, cls:'badge-amber' },
+    ]
+  },
+  CLT: { avgFare: 252, window: '21–35 days', cheapDay: 'Tuesday', cheapDayFare: 205, cheapMonth: 'October', cheapMonthFare: 215,
+    fares: [352,328,305,265,211,205,218,232,252,268,292,325],
+    airlines: [
+      { name:'Spirit',    fare:155, cls:'badge-green' },
+      { name:'American',  fare:225, cls:'badge-green' },
+      { name:'United',    fare:242, cls:'badge-green' },
+      { name:'Delta',     fare:265, cls:'badge-amber' },
+      { name:'Frontier',  fare:172, cls:'badge-green' },
+      { name:'Southwest', fare:235, cls:'badge-green' },
+    ]
+  },
+};
+
+const daysLabels = ['1d','3d','7d','14d','21d','28d','35d','42d','56d','70d','90d','120d'];
+const sweetSpotIdx = [4, 5, 6]; // indices of 21d, 28d, 35d
+
+// Heatmap data (day of week × month)
+const months    = ['Apr','May','Jun','Jul','Aug','Sep','Oct'];
+const weekdays  = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const heatBase  = [
+  [310,290,305,295,315,340,330],
+  [275,255,265,270,295,320,308],
+  [285,260,272,268,300,330,318],
+  [290,265,278,272,305,335,322],
+  [320,298,308,302,330,358,345],
+  [258,241,250,246,272,298,285],
+  [278,256,268,262,290,315,302]
+];
+
+// ── Chart instance ──
+let fareChartInstance = null;
+
+function buildFareChart(origin, fares) {
+  const ctx = document.getElementById('fareChart');
+  if (fareChartInstance) fareChartInstance.destroy();
+
+  const pointColors = fares.map((_, i) => sweetSpotIdx.includes(i) ? '#1D9E75' : '#9FE1CB');
+  const pointSizes  = fares.map((_, i) => sweetSpotIdx.includes(i) ? 6 : 3);
+
+  fareChartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: daysLabels,
+      datasets: [{
+        label: 'Avg fare ($)',
+        data: fares,
+        borderColor: '#1D9E75',
+        backgroundColor: 'rgba(29,158,117,0.07)',
+        borderWidth: 2.5,
+        pointRadius: pointSizes,
+        pointBackgroundColor: pointColors,
+        pointBorderColor: pointColors,
+        tension: 0.42,
+        fill: true,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ' $' + ctx.parsed.y + ' avg fare',
+            title: ctx => ctx[0].label + ' before departure'
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(0,0,0,0.05)' },
+          ticks: { font: { size: 11, family: 'DM Sans' }, color: '#aaa', autoSkip: false, maxRotation: 0 }
+        },
+        y: {
+          min: 150,
+          grid: { color: 'rgba(0,0,0,0.05)' },
+          ticks: {
+            font: { size: 11, family: 'DM Sans' },
+            color: '#aaa',
+            callback: v => '$' + v
+          }
+        }
+      }
+    }
+  });
+}
+
+function buildHeatmap(origin) {
+  const hm = document.getElementById('heatmap');
+  // Slightly offset heatmap values by route for realism
+  const offset = (routeData[origin].avgFare - 287) * 0.3;
+
+  hm.innerHTML = '';
+  // Header row
+  hm.innerHTML += '<div class="hm-label"></div>' + months.map(m => `<div class="hm-label">${m}</div>`).join('');
+
+  const allVals = heatBase.flat().map(v => v + offset);
+  const minV = Math.min(...allVals), maxV = Math.max(...allVals);
+
+  weekdays.forEach((wd, wi) => {
+    hm.innerHTML += `<div class="hm-label row-label">${wd}</div>`;
+    months.forEach((_, mi) => {
+      const v = Math.round(heatBase[wi][mi] + offset);
+      const t = (v - minV) / (maxV - minV);
+      // Green (cheap) → neutral → coral (expensive)
+      let r, g, b;
+      if (t < 0.5) {
+        const s = t * 2;
+        r = Math.round(29  + s * (245 - 29));
+        g = Math.round(158 + s * (244 - 158));
+        b = Math.round(117 + s * (229 - 117));
+      } else {
+        const s = (t - 0.5) * 2;
+        r = Math.round(245 + s * (216 - 245));
+        g = Math.round(244 + s * (90  - 244));
+        b = Math.round(229 + s * (48  - 229));
+      }
+      const textColor = t > 0.65 ? '#fff' : (t < 0.25 ? '#0F6E56' : '#555');
+      hm.innerHTML += `<div class="hm-cell" style="background:rgb(${r},${g},${b});color:${textColor};" title="${wd} in ${months[mi]}: $${v}">$${v}</div>`;
+    });
+  });
+}
+
+function buildAirlines(origin) {
+  const list = document.getElementById('airlineList');
+  const airlines = [...routeData[origin].airlines].sort((a,b) => a.fare - b.fare);
+  const dotColors = { 'badge-green':'#1D9E75', 'badge-amber':'#BA7517', 'badge-red':'#E24B4A' };
+  list.innerHTML = airlines.map(a => `
+    <div class="airline-row">
+      <div class="airline-name">
+        <div class="airline-dot" style="background:${dotColors[a.cls]};"></div>
+        ${a.name}
+      </div>
+      <span class="badge ${a.cls}">$${a.fare}</span>
+    </div>
+  `).join('');
+}
+
+function buildInsights(origin) {
+  const d = routeData[origin];
+  const insights = [
+    { icon:'✓', cls:'green', html:`<strong>Sweet spot: book ${d.window} out.</strong> This window saves an average of $${Math.round(d.avgFare - d.cheapDayFare + 40)} vs. booking within 7 days on this route.` },
+    { icon:'!', cls:'amber', html:`<strong>Avoid booking 90+ days early.</strong> Early fares on ${origin}–ORD are priced high before the airline adjusts for demand.` },
+    { icon:'✓', cls:'green', html:`<strong>Fly on ${d.cheapDay}.</strong> Mid-week departures average $${d.cheapDayFare} — one of the cheapest combinations on this route.` },
+    { icon:'↗', cls:'blue',  html:`<strong>${d.cheapMonth} is the cheapest month</strong> for this route at an average of $${d.cheapMonthFare}. Summer (Jun–Aug) tends to spike fares significantly.` },
+  ];
+  document.getElementById('insightsList').innerHTML = insights.map(i => `
+    <div class="tip-row">
+      <div class="tip-icon ${i.cls}">${i.icon}</div>
+      <div class="tip-text">${i.html}</div>
+    </div>
+  `).join('');
+}
+
+function updateDashboard() {
+  const origin = document.getElementById('originSel').value;
+  const dir    = document.getElementById('dirSel').value;
+  const d      = routeData[origin];
+
+  const dirLabel = dir === 'to' ? `${origin} → ORD` : dir === 'from' ? `ORD → ${origin}` : `${origin} ↔ ORD`;
+
+  document.getElementById('m-avgfare').textContent   = '$' + d.avgFare;
+  document.getElementById('m-route').textContent     = dirLabel;
+  document.getElementById('m-window').textContent    = d.window;
+  document.getElementById('m-day').textContent       = d.cheapDay;
+  document.getElementById('m-dayfare').textContent   = 'avg. $' + d.cheapDayFare;
+  document.getElementById('m-month').textContent     = d.cheapMonth;
+  document.getElementById('m-monthfare').textContent = 'avg. $' + d.cheapMonthFare;
+  document.getElementById('chartTitle').textContent  = `Avg. fare vs. days booked in advance — ${dirLabel}`;
+
+  buildFareChart(origin, d.fares);
+  buildHeatmap(origin);
+  buildAirlines(origin);
+  buildInsights(origin);
+}
+
+// Init on load
+updateDashboard();
+
+// ── Sky Scrapper API Integration ──
+const RAPIDAPI_KEY = 'cd78f9c3a9msha0c42cef2e65754p1d9c98jsn656cb9e52860';
+const RAPIDAPI_HOST = 'sky-scrapper.p.rapidapi.com';
+
+// Airport SkyId map (Sky Scrapper uses its own IDs)
+const skyIds = {
+  LAX: { skyId: 'LAX', entityId: '27544008' },
+  JFK: { skyId: 'JFK', entityId: '27537542' },
+  MIA: { skyId: 'MIA', entityId: '27539488' },
+  SFO: { skyId: 'SFO', entityId: '27546920' },
+  BOS: { skyId: 'BOS', entityId: '27535398' },
+  ATL: { skyId: 'ATL', entityId: '27534630' },
+  DFW: { skyId: 'DFW', entityId: '27536544' },
+  DEN: { skyId: 'DEN', entityId: '27536476' },
+  EWR: { skyId: 'EWR', entityId: '27537746' },
+  PHL: { skyId: 'PHL', entityId: '27540830' },
+  DTW: { skyId: 'DTW', entityId: '27536726' },
+  LGA: { skyId: 'LGA', entityId: '27537896' },
+  IAD: { skyId: 'IAD', entityId: '27537290' },
+  OAK: { skyId: 'OAK', entityId: '27540414' },
+  CLT: { skyId: 'CLT', entityId: '27535972' },
+  ORD: { skyId: 'ORD', entityId: '27536542' },
+};
+
+function setLiveLoading(isLoading) {
+  const btn = document.getElementById('liveBtn');
+  const results = document.getElementById('liveResults');
+  if (isLoading) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Fetching...';
+    results.innerHTML = '<div class="live-empty"><span class="spinner"></span> Calling Sky Scrapper API for live prices...</div>';
+  } else {
+    btn.disabled = false;
+    btn.innerHTML = 'Check live prices';
+  }
+}
+
+async function fetchLivePrices() {
+  const origin    = document.getElementById('originSel').value;
+  const dir       = document.getElementById('dirSel').value;
+  const dateInput = document.getElementById('liveDateInput').value;
+  const cabin     = document.getElementById('liveCabin').value;
+  const results   = document.getElementById('liveResults');
+
+  if (!dateInput) {
+    results.innerHTML = '<div class="live-error">Please select a departure date first.</div>';
+    return;
+  }
+
+  // Determine origin/destination based on direction
+  const fromAirport = dir === 'from' ? 'ORD' : origin;
+  const toAirport   = dir === 'from' ? origin : 'ORD';
+
+  const fromSky = skyIds[fromAirport];
+  const toSky   = skyIds[toAirport];
+
+  setLiveLoading(true);
+
+  try {
+    const url = new URL('https://sky-scrapper.p.rapidapi.com/api/v2/flights/searchFlights');
+    url.searchParams.set('originSkyId',        fromSky.skyId);
+    url.searchParams.set('destinationSkyId',   toSky.skyId);
+    url.searchParams.set('originEntityId',     fromSky.entityId);
+    url.searchParams.set('destinationEntityId',toSky.entityId);
+    url.searchParams.set('date',               dateInput);
+    url.searchParams.set('cabinClass',         cabin);
+    url.searchParams.set('adults',             '1');
+    url.searchParams.set('sortBy',             'best');
+    url.searchParams.set('currency',           'USD');
+    url.searchParams.set('market',             'en-US');
+    url.searchParams.set('countryCode',        'US');
+
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: {
+        'x-rapidapi-host': RAPIDAPI_HOST,
+        'x-rapidapi-key':  RAPIDAPI_KEY,
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`API returned status ${response.status}`);
+    }
+
+    const data = await response.json();
+    renderLiveResults(data, fromAirport, toAirport, dateInput, origin);
+
+  } catch (err) {
+    results.innerHTML = `<div class="live-error">Could not fetch live prices: ${err.message}. Check your API key or try again shortly.</div>`;
+  } finally {
+    setLiveLoading(false);
+  }
+}
+
+function renderLiveResults(data, fromAirport, toAirport, dateStr, origin) {
+  const results = document.getElementById('liveResults');
+
+  // Extract itineraries from Sky Scrapper response
+  const itineraries = data?.data?.itineraries || [];
+
+  if (!itineraries.length) {
+    results.innerHTML = '<div class="live-empty">No flights found for this route and date. Try a different date.</div>';
+    return;
+  }
+
+  // Take top 5 cheapest
+  const top = itineraries.slice(0, 5);
+  const modelAvg = routeData[origin]?.avgFare || 0;
+
+  // Build flight cards
+  const cards = top.map(it => {
+    const price     = it.price?.raw || it.price?.formatted || 'N/A';
+    const priceNum  = parseFloat(price) || 0;
+    const leg       = it.legs?.[0] || {};
+    const airline   = leg.carriers?.marketing?.[0]?.name || 'Unknown airline';
+    const stops     = leg.stopCount ?? '?';
+    const duration  = leg.durationInMinutes ? `${Math.floor(leg.durationInMinutes/60)}h ${leg.durationInMinutes%60}m` : '';
+    const depart    = leg.departure ? leg.departure.slice(11,16) : '';
+    const arrive    = leg.arrival   ? leg.arrival.slice(11,16)   : '';
+    const isNonStop = stops === 0;
+
+    return `
+      <div class="live-card">
+        <div class="live-card-airline">${airline}</div>
+        <div class="live-card-price">$${priceNum > 0 ? Math.round(priceNum) : price}</div>
+        <div class="live-card-detail">${depart}${depart && arrive ? ' → ' : ''}${arrive}${duration ? ' &nbsp;·&nbsp; ' + duration : ''}</div>
+        <span class="live-card-stops ${isNonStop ? '' : 'has-stops'}">${isNonStop ? 'Nonstop' : stops + ' stop' + (stops > 1 ? 's' : '')}</span>
+      </div>
+    `;
+  }).join('');
+
+  // Comparison vs model prediction
+  const cheapestLive = parseFloat(top[0]?.price?.raw) || 0;
+  const modelWindow  = routeData[origin]?.window || 'N/A';
+  let compareHtml = '';
+  if (cheapestLive > 0 && modelAvg > 0) {
+    const diff = Math.round(cheapestLive - modelAvg);
+    const today = new Date();
+    const depDate = new Date(dateStr + 'T00:00:00');
+    const daysOut = Math.round((depDate - today) / (1000*60*60*24));
+    if (diff > 30) {
+      compareHtml = `<div class="live-compare warn">Live price ($${Math.round(cheapestLive)}) is <strong>$${diff} above</strong> the historical average ($${modelAvg}) for this route. Our model suggests the best window is <strong>${modelWindow}</strong> — you are ${daysOut} days out. Consider waiting.</div>`;
+    } else if (diff < -20) {
+      compareHtml = `<div class="live-compare good">Live price ($${Math.round(cheapestLive)}) is <strong>$${Math.abs(diff)} below</strong> the historical average ($${modelAvg}). This looks like a good deal — consider booking now!</div>`;
+    } else {
+      compareHtml = `<div class="live-compare neutral">Live price ($${Math.round(cheapestLive)}) is close to the historical average ($${modelAvg}) for this route. You are ${daysOut} days out. Model's best booking window is <strong>${modelWindow}</strong>.</div>`;
+    }
+  }
+
+  results.innerHTML = `
+    <div class="live-results">${cards}</div>
+    ${compareHtml}
+    <div style="font-size:11px;color:#ccc;margin-top:8px;text-align:right;">Data via Sky Scrapper API · ${fromAirport} → ${toAirport} · ${dateStr}</div>
+  `;
+}
+
+// Set default date to 30 days from today
+(function setDefaultDate() {
+  const d = new Date();
+  d.setDate(d.getDate() + 30);
+  const iso = d.toISOString().split('T')[0];
+  document.getElementById('liveDateInput').value = iso;
+  document.getElementById('liveDateInput').min = new Date().toISOString().split('T')[0];
+})();
+
+</script>
+</body>
+</html>
