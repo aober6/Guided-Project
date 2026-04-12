@@ -15,5 +15,4 @@ Note that they use octoparse[https://www.octoparse.com/] and EaseMyTrip[https://
 [(https://developers.amadeus.com/self-service/apis-docs/guides/developer-guides/quick-start/)]
 
 Architecture ideas:
-- neural network?
-- 
+- XGBoost
