@@ -16,3 +16,4 @@ Note that they use octoparse[https://www.octoparse.com/] and EaseMyTrip[https://
 
 Architecture ideas:
 - XGBoost
+- RandomForest, linear regression
