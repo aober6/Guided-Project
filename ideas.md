@@ -16,3 +16,6 @@ Note that they use octoparse[https://www.octoparse.com/] and EaseMyTrip[https://
 
 Architecture ideas:
 - XGBoost
+- Scale Features
+- Linear Regression
+- Cut off high values of flight prices
