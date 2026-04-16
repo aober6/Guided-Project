@@ -4,6 +4,7 @@
 # Data files (too large for git)
 data/
 *.csv
+chicago_itineraries.csv
 *.parquet
 *.pkl
 *.h5
@@ -14,6 +15,7 @@ data/
 
 # Results / model artifacts
 results/*.pkl
+results/*.db
 
 # Python
 __pycache__/

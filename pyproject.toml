@@ -7,6 +7,7 @@ requires-python = ">=3.13"
 dependencies = [
     "data>=0.4",
     "kagglehub>=1.0.0",
+    "lightgbm>=4.6.0",
     "matplotlib>=3.10.8",
     "numpy>=2.4.4",
     "optuna>=4.8.0",
