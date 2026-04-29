@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "data>=0.4",
+    "fastapi>=0.136.1",
     "kagglehub>=1.0.0",
     "lightgbm>=4.6.0",
     "matplotlib>=3.10.8",
@@ -15,5 +16,6 @@ dependencies = [
     "scikit-learn>=1.8.0",
     "seaborn>=0.13.2",
     "tabulate>=0.10.0",
+    "uvicorn>=0.46.0",
     "xgboost>=3.2.0",
 ]

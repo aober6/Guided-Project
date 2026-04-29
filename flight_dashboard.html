@@ -585,190 +585,18 @@
 </main>
 
 <script>
-// ── Route data (simulated — replace with real model output) ──
-const routeData = {
-  LAX: { avgFare: 287, window: '21–35 days', cheapDay: 'Tuesday', cheapDayFare: 241, cheapMonth: 'September', cheapMonthFare: 254,
-    fares: [389,362,341,305,248,241,255,272,291,308,334,358],
-    airlines: [
-      { name:'Spirit',    fare:189, cls:'badge-green' },
-      { name:'United',    fare:261, cls:'badge-green' },
-      { name:'American',  fare:274, cls:'badge-green' },
-      { name:'Delta',     fare:298, cls:'badge-amber' },
-      { name:'Alaska',    fare:312, cls:'badge-amber' },
-      { name:'JetBlue',   fare:341, cls:'badge-red'   },
-    ]
-  },
-  JFK: { avgFare: 312, window: '14–28 days', cheapDay: 'Wednesday', cheapDayFare: 268, cheapMonth: 'September', cheapMonthFare: 278,
-    fares: [420,395,368,330,275,268,280,295,310,325,355,390],
-    airlines: [
-      { name:'JetBlue',   fare:215, cls:'badge-green' },
-      { name:'United',    fare:289, cls:'badge-green' },
-      { name:'Delta',     fare:308, cls:'badge-amber' },
-      { name:'American',  fare:321, cls:'badge-amber' },
-      { name:'Spirit',    fare:198, cls:'badge-green' },
-      { name:'Alaska',    fare:345, cls:'badge-red'   },
-    ]
-  },
-  MIA: { avgFare: 298, window: '21–42 days', cheapDay: 'Tuesday', cheapDayFare: 252, cheapMonth: 'October', cheapMonthFare: 241,
-    fares: [405,380,355,318,260,252,265,278,298,315,340,375],
-    airlines: [
-      { name:'Spirit',    fare:178, cls:'badge-green' },
-      { name:'American',  fare:261, cls:'badge-green' },
-      { name:'United',    fare:279, cls:'badge-green' },
-      { name:'Delta',     fare:305, cls:'badge-amber' },
-      { name:'Frontier',  fare:201, cls:'badge-green' },
-      { name:'JetBlue',   fare:328, cls:'badge-red'   },
-    ]
-  },
-  SFO: { avgFare: 305, window: '28–42 days', cheapDay: 'Thursday', cheapDayFare: 261, cheapMonth: 'September', cheapMonthFare: 268,
-    fares: [410,385,362,322,268,261,270,285,305,320,348,380],
-    airlines: [
-      { name:'United',    fare:248, cls:'badge-green' },
-      { name:'Southwest', fare:225, cls:'badge-green' },
-      { name:'Delta',     fare:291, cls:'badge-green' },
-      { name:'American',  fare:315, cls:'badge-amber' },
-      { name:'Alaska',    fare:308, cls:'badge-amber' },
-      { name:'JetBlue',   fare:352, cls:'badge-red'   },
-    ]
-  },
-  BOS: { avgFare: 275, window: '14–21 days', cheapDay: 'Tuesday', cheapDayFare: 228, cheapMonth: 'October', cheapMonthFare: 235,
-    fares: [378,352,328,290,235,228,240,255,275,292,318,355],
-    airlines: [
-      { name:'JetBlue',   fare:198, cls:'badge-green' },
-      { name:'United',    fare:241, cls:'badge-green' },
-      { name:'American',  fare:258, cls:'badge-green' },
-      { name:'Delta',     fare:282, cls:'badge-amber' },
-      { name:'Spirit',    fare:172, cls:'badge-green' },
-      { name:'Alaska',    fare:315, cls:'badge-red'   },
-    ]
-  },
-  ATL: { avgFare: 241, window: '21–35 days', cheapDay: 'Wednesday', cheapDayFare: 198, cheapMonth: 'September', cheapMonthFare: 208,
-    fares: [342,318,295,258,205,198,210,225,241,258,282,315],
-    airlines: [
-      { name:'Spirit',    fare:149, cls:'badge-green' },
-      { name:'Frontier',  fare:165, cls:'badge-green' },
-      { name:'Delta',     fare:221, cls:'badge-green' },
-      { name:'United',    fare:238, cls:'badge-green' },
-      { name:'American',  fare:255, cls:'badge-amber' },
-      { name:'Southwest', fare:218, cls:'badge-green' },
-    ]
-  },
-  DFW: { avgFare: 258, window: '21–35 days', cheapDay: 'Tuesday', cheapDayFare: 212, cheapMonth: 'October', cheapMonthFare: 221,
-    fares: [358,335,312,272,218,212,225,240,258,275,298,330],
-    airlines: [
-      { name:'Spirit',    fare:162, cls:'badge-green' },
-      { name:'American',  fare:228, cls:'badge-green' },
-      { name:'United',    fare:245, cls:'badge-green' },
-      { name:'Delta',     fare:268, cls:'badge-amber' },
-      { name:'Frontier',  fare:178, cls:'badge-green' },
-      { name:'Southwest', fare:235, cls:'badge-green' },
-    ]
-  },
-  DEN: { avgFare: 268, window: '28–42 days', cheapDay: 'Tuesday', cheapDayFare: 221, cheapMonth: 'September', cheapMonthFare: 231,
-    fares: [368,345,322,282,228,221,232,248,268,285,308,342],
-    airlines: [
-      { name:'Frontier',  fare:148, cls:'badge-green' },
-      { name:'United',    fare:238, cls:'badge-green' },
-      { name:'Southwest', fare:215, cls:'badge-green' },
-      { name:'American',  fare:262, cls:'badge-amber' },
-      { name:'Delta',     fare:278, cls:'badge-amber' },
-      { name:'Spirit',    fare:171, cls:'badge-green' },
-    ]
-  },
-  EWR: { avgFare: 318, window: '14–28 days', cheapDay: 'Wednesday', cheapDayFare: 271, cheapMonth: 'October', cheapMonthFare: 282,
-    fares: [428,402,375,338,278,271,285,298,318,335,362,398],
-    airlines: [
-      { name:'United',    fare:258, cls:'badge-green' },
-      { name:'Spirit',    fare:185, cls:'badge-green' },
-      { name:'Delta',     fare:305, cls:'badge-amber' },
-      { name:'American',  fare:322, cls:'badge-amber' },
-      { name:'JetBlue',   fare:248, cls:'badge-green' },
-      { name:'Alaska',    fare:355, cls:'badge-red'   },
-    ]
-  },
-  PHL: { avgFare: 262, window: '21–35 days', cheapDay: 'Tuesday', cheapDayFare: 215, cheapMonth: 'September', cheapMonthFare: 225,
-    fares: [362,338,315,275,221,215,228,242,262,278,302,335],
-    airlines: [
-      { name:'Spirit',    fare:158, cls:'badge-green' },
-      { name:'American',  fare:235, cls:'badge-green' },
-      { name:'United',    fare:252, cls:'badge-green' },
-      { name:'Delta',     fare:275, cls:'badge-amber' },
-      { name:'Frontier',  fare:175, cls:'badge-green' },
-      { name:'JetBlue',   fare:298, cls:'badge-amber' },
-    ]
-  },
-  DTW: { avgFare: 235, window: '14–21 days', cheapDay: 'Wednesday', cheapDayFare: 188, cheapMonth: 'October', cheapMonthFare: 198,
-    fares: [335,312,288,251,195,188,200,215,235,252,275,308],
-    airlines: [
-      { name:'Spirit',    fare:142, cls:'badge-green' },
-      { name:'Delta',     fare:208, cls:'badge-green' },
-      { name:'United',    fare:225, cls:'badge-green' },
-      { name:'American',  fare:242, cls:'badge-green' },
-      { name:'Frontier',  fare:161, cls:'badge-green' },
-      { name:'Southwest', fare:215, cls:'badge-green' },
-    ]
-  },
-  LGA: { avgFare: 305, window: '14–28 days', cheapDay: 'Tuesday', cheapDayFare: 258, cheapMonth: 'September', cheapMonthFare: 268,
-    fares: [415,390,365,328,265,258,272,285,305,322,348,382],
-    airlines: [
-      { name:'Delta',     fare:245, cls:'badge-green' },
-      { name:'United',    fare:272, cls:'badge-green' },
-      { name:'American',  fare:291, cls:'badge-amber' },
-      { name:'Spirit',    fare:192, cls:'badge-green' },
-      { name:'JetBlue',   fare:228, cls:'badge-green' },
-      { name:'Alaska',    fare:335, cls:'badge-red'   },
-    ]
-  },
-  IAD: { avgFare: 272, window: '21–35 days', cheapDay: 'Wednesday', cheapDayFare: 225, cheapMonth: 'October', cheapMonthFare: 235,
-    fares: [372,348,325,285,231,225,238,252,272,288,312,345],
-    airlines: [
-      { name:'Spirit',    fare:168, cls:'badge-green' },
-      { name:'United',    fare:242, cls:'badge-green' },
-      { name:'American',  fare:258, cls:'badge-green' },
-      { name:'Delta',     fare:282, cls:'badge-amber' },
-      { name:'Frontier',  fare:182, cls:'badge-green' },
-      { name:'Southwest', fare:245, cls:'badge-green' },
-    ]
-  },
-  OAK: { avgFare: 292, window: '28–42 days', cheapDay: 'Tuesday', cheapDayFare: 245, cheapMonth: 'September', cheapMonthFare: 255,
-    fares: [395,372,348,308,252,245,258,272,292,308,335,368],
-    airlines: [
-      { name:'Southwest', fare:212, cls:'badge-green' },
-      { name:'United',    fare:258, cls:'badge-green' },
-      { name:'Alaska',    fare:275, cls:'badge-green' },
-      { name:'Delta',     fare:298, cls:'badge-amber' },
-      { name:'Spirit',    fare:178, cls:'badge-green' },
-      { name:'American',  fare:318, cls:'badge-amber' },
-    ]
-  },
-  CLT: { avgFare: 252, window: '21–35 days', cheapDay: 'Tuesday', cheapDayFare: 205, cheapMonth: 'October', cheapMonthFare: 215,
-    fares: [352,328,305,265,211,205,218,232,252,268,292,325],
-    airlines: [
-      { name:'Spirit',    fare:155, cls:'badge-green' },
-      { name:'American',  fare:225, cls:'badge-green' },
-      { name:'United',    fare:242, cls:'badge-green' },
-      { name:'Delta',     fare:265, cls:'badge-amber' },
-      { name:'Frontier',  fare:172, cls:'badge-green' },
-      { name:'Southwest', fare:235, cls:'badge-green' },
-    ]
-  },
-};
+// ── Model API config ──
+const MODEL_API_URL = 'http://localhost:8000/predict';
+
+// Latest model response for the current route — used by renderLiveResults
+// to compare live prices against the model's avg fare / booking window.
+let lastModelData = null;
 
 const daysLabels = ['1d','3d','7d','14d','21d','28d','35d','42d','56d','70d','90d','120d'];
 const sweetSpotIdx = [4, 5, 6]; // indices of 21d, 28d, 35d
 
-// Heatmap data (day of week × month)
 const months    = ['Apr','May','Jun','Jul','Aug','Sep','Oct'];
 const weekdays  = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-const heatBase  = [
-  [310,290,305,295,315,340,330],
-  [275,255,265,270,295,320,308],
-  [285,260,272,268,300,330,318],
-  [290,265,278,272,305,335,322],
-  [320,298,308,302,330,358,345],
-  [258,241,250,246,272,298,285],
-  [278,256,268,262,290,315,302]
-];
 
 // ── Chart instance ──
 let fareChartInstance = null;
@@ -828,24 +656,20 @@ function buildFareChart(origin, fares) {
   });
 }
 
-function buildHeatmap(origin) {
+function buildHeatmapFromModel(matrix) {
   const hm = document.getElementById('heatmap');
-  // Slightly offset heatmap values by route for realism
-  const offset = (routeData[origin].avgFare - 287) * 0.3;
-
   hm.innerHTML = '';
-  // Header row
   hm.innerHTML += '<div class="hm-label"></div>' + months.map(m => `<div class="hm-label">${m}</div>`).join('');
 
-  const allVals = heatBase.flat().map(v => v + offset);
+  const allVals = matrix.flat();
   const minV = Math.min(...allVals), maxV = Math.max(...allVals);
+  const range = maxV - minV || 1;
 
   weekdays.forEach((wd, wi) => {
     hm.innerHTML += `<div class="hm-label row-label">${wd}</div>`;
     months.forEach((_, mi) => {
-      const v = Math.round(heatBase[wi][mi] + offset);
-      const t = (v - minV) / (maxV - minV);
-      // Green (cheap) → neutral → coral (expensive)
+      const v = Math.round(matrix[wi][mi]);
+      const t = (v - minV) / range;
       let r, g, b;
       if (t < 0.5) {
         const s = t * 2;
@@ -864,11 +688,11 @@ function buildHeatmap(origin) {
   });
 }
 
-function buildAirlines(origin) {
+function buildAirlines(airlines) {
   const list = document.getElementById('airlineList');
-  const airlines = [...routeData[origin].airlines].sort((a,b) => a.fare - b.fare);
+  const sorted = [...airlines].sort((a, b) => a.fare - b.fare);
   const dotColors = { 'badge-green':'#1D9E75', 'badge-amber':'#BA7517', 'badge-red':'#E24B4A' };
-  list.innerHTML = airlines.map(a => `
+  list.innerHTML = sorted.map(a => `
     <div class="airline-row">
       <div class="airline-name">
         <div class="airline-dot" style="background:${dotColors[a.cls]};"></div>
@@ -879,8 +703,7 @@ function buildAirlines(origin) {
   `).join('');
 }
 
-function buildInsights(origin) {
-  const d = routeData[origin];
+function buildInsights(d, origin) {
   const insights = [
     { icon:'✓', cls:'green', html:`<strong>Sweet spot: book ${d.window} out.</strong> This window saves an average of $${Math.round(d.avgFare - d.cheapDayFare + 40)} vs. booking within 7 days on this route.` },
     { icon:'!', cls:'amber', html:`<strong>Avoid booking 90+ days early.</strong> Early fares on ${origin}–ORD are priced high before the airline adjusts for demand.` },
@@ -895,26 +718,40 @@ function buildInsights(origin) {
   `).join('');
 }
 
-function updateDashboard() {
+async function updateDashboard() {
   const origin = document.getElementById('originSel').value;
   const dir    = document.getElementById('dirSel').value;
-  const d      = routeData[origin];
 
   const dirLabel = dir === 'to' ? `${origin} → ORD` : dir === 'from' ? `ORD → ${origin}` : `${origin} ↔ ORD`;
+  document.getElementById('m-route').textContent    = dirLabel;
+  document.getElementById('m-avgfare').textContent  = '…';
+  document.getElementById('chartTitle').textContent = `Avg. fare vs. days booked in advance — ${dirLabel}`;
 
-  document.getElementById('m-avgfare').textContent   = '$' + d.avgFare;
-  document.getElementById('m-route').textContent     = dirLabel;
-  document.getElementById('m-window').textContent    = d.window;
-  document.getElementById('m-day').textContent       = d.cheapDay;
-  document.getElementById('m-dayfare').textContent   = 'avg. $' + d.cheapDayFare;
-  document.getElementById('m-month').textContent     = d.cheapMonth;
-  document.getElementById('m-monthfare').textContent = 'avg. $' + d.cheapMonthFare;
-  document.getElementById('chartTitle').textContent  = `Avg. fare vs. days booked in advance — ${dirLabel}`;
+  try {
+    const response = await fetch(MODEL_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ origin, destination: 'ORD' })
+    });
+    if (!response.ok) throw new Error('Model API ' + response.status);
+    const d = await response.json();
+    lastModelData = d;
 
-  buildFareChart(origin, d.fares);
-  buildHeatmap(origin);
-  buildAirlines(origin);
-  buildInsights(origin);
+    document.getElementById('m-avgfare').textContent   = '$' + d.avgFare;
+    document.getElementById('m-window').textContent    = d.window;
+    document.getElementById('m-day').textContent       = d.cheapDay;
+    document.getElementById('m-dayfare').textContent   = 'avg. $' + d.cheapDayFare;
+    document.getElementById('m-month').textContent     = d.cheapMonth;
+    document.getElementById('m-monthfare').textContent = 'avg. $' + d.cheapMonthFare;
+
+    buildFareChart(origin, d.fares);
+    buildHeatmapFromModel(d.heatmap);
+    buildAirlines(d.airlines);
+    buildInsights(d, origin);
+  } catch (err) {
+    document.getElementById('m-avgfare').textContent = 'Error';
+    console.error('Model fetch failed:', err);
+  }
 }
 
 // Init on load
@@ -1027,7 +864,7 @@ function renderLiveResults(data, fromAirport, toAirport, dateStr, origin) {
 
   // Take top 5 cheapest
   const top = itineraries.slice(0, 5);
-  const modelAvg = routeData[origin]?.avgFare || 0;
+  const modelAvg = lastModelData?.avgFare || 0;
 
   // Build flight cards
   const cards = top.map(it => {
@@ -1053,7 +890,7 @@ function renderLiveResults(data, fromAirport, toAirport, dateStr, origin) {
 
   // Comparison vs model prediction
   const cheapestLive = parseFloat(top[0]?.price?.raw) || 0;
-  const modelWindow  = routeData[origin]?.window || 'N/A';
+  const modelWindow  = lastModelData?.window || 'N/A';
   let compareHtml = '';
   if (cheapestLive > 0 && modelAvg > 0) {
     const diff = Math.round(cheapestLive - modelAvg);

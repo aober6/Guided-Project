@@ -52,7 +52,10 @@ def _load_encoders():
 
 MODEL    = _load_model()
 X_TRAIN  = _load_encoders()
-FEATURES = X_TRAIN.columns.tolist()   # ground-truth feature order
+# Trust the model's own feature_names — X_train.csv on disk may have drifted
+# from what the persisted model was actually trained on.
+_booster_feats = MODEL.get_booster().feature_names
+FEATURES = _booster_feats if _booster_feats else X_TRAIN.columns.tolist()
 
 # ── Precompute target-encoded lookup tables from training data ─────────────────
 # preprocess.py target-encodes 'route' and 'primary_airline'.
