@@ -7,6 +7,7 @@ Parameters that affect flight cost:
 - Total Number of Stops
 - Previous flight prices
 - Departure/Arrival Time?
+- 
 
 Dataset: https://www.kaggle.com/datasets/dilwong/flightprices
 
@@ -19,3 +20,4 @@ Architecture ideas:
 - Scale Features
 - Linear Regression
 - Cut off high values of flight prices
+

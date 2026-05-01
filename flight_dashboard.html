@@ -1,0 +1,1214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>FlightLens — Chicago Flight Price Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&family=Syne:wght@600&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: #f5f4f0;
+      color: #1a1a18;
+      min-height: 100vh;
+    }
+
+    /* ── Top nav ── */
+    .navbar {
+      background: #fff;
+      border-bottom: 0.5px solid rgba(0,0,0,0.1);
+      padding: 0 2rem;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .brand {
+      font-family: 'Syne', sans-serif;
+      font-size: 20px;
+      color: #1a1a18;
+      letter-spacing: -0.5px;
+    }
+    .brand span { color: #1D9E75; }
+    .nav-tag {
+      font-size: 12px;
+      color: #888;
+      background: #f1f0ec;
+      padding: 4px 10px;
+      border-radius: 99px;
+    }
+
+    /* ── Main layout ── */
+    .main { padding: 1.5rem 2rem 3rem; max-width: 1200px; margin: 0 auto; }
+
+    /* ── Route selector bar ── */
+    .route-bar {
+      background: #fff;
+      border: 0.5px solid rgba(0,0,0,0.1);
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 1.25rem;
+    }
+    .route-bar label {
+      font-size: 12px;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .sel {
+      height: 36px;
+      padding: 0 12px;
+      border-radius: 8px;
+      border: 0.5px solid rgba(0,0,0,0.15);
+      background: #fafaf8;
+      color: #1a1a18;
+      font-size: 13px;
+      font-family: 'DM Sans', sans-serif;
+      cursor: pointer;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .sel:focus { border-color: #1D9E75; }
+    .arrow-icon {
+      font-size: 18px;
+      color: #bbb;
+      flex-shrink: 0;
+    }
+    .btn-analyze {
+      height: 36px;
+      padding: 0 20px;
+      background: #1D9E75;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+      margin-left: auto;
+    }
+    .btn-analyze:hover { background: #0F6E56; }
+    .btn-analyze:active { transform: scale(0.97); }
+
+    /* ── Metric cards ── */
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 1.25rem;
+    }
+    .metric {
+      background: #fff;
+      border: 0.5px solid rgba(0,0,0,0.08);
+      border-radius: 10px;
+      padding: 16px 18px;
+      transition: box-shadow 0.15s;
+    }
+    .metric:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+    .metric-label {
+      font-size: 11px;
+      color: #999;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+    .metric-value {
+      font-size: 24px;
+      font-weight: 500;
+      color: #1a1a18;
+      line-height: 1.1;
+    }
+    .metric-value.good { color: #0F6E56; }
+    .metric-value.warn { color: #854F0B; }
+    .metric-sub {
+      font-size: 11px;
+      color: #aaa;
+      margin-top: 5px;
+    }
+
+    /* ── Two-column panels ── */
+    .panels {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    /* ── Cards ── */
+    .card {
+      background: #fff;
+      border: 0.5px solid rgba(0,0,0,0.08);
+      border-radius: 12px;
+      padding: 1.25rem 1.5rem;
+    }
+    .card-title {
+      font-size: 12px;
+      font-weight: 500;
+      color: #999;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 1rem;
+    }
+
+    /* ── Bottom panels ── */
+    .bottom-panels {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    /* ── Fare chart ── */
+    .chart-wrap {
+      position: relative;
+      width: 100%;
+      height: 240px;
+    }
+
+    /* ── Airline list ── */
+    .airline-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 9px 0;
+      border-bottom: 0.5px solid rgba(0,0,0,0.06);
+    }
+    .airline-row:last-child { border-bottom: none; }
+    .airline-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      margin-right: 10px;
+      flex-shrink: 0;
+    }
+    .airline-name { font-size: 13px; color: #1a1a18; display: flex; align-items: center; }
+    .badge {
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 500;
+      padding: 3px 10px;
+      border-radius: 99px;
+    }
+    .badge-green { background: #E1F5EE; color: #0F6E56; }
+    .badge-amber { background: #FAEEDA; color: #854F0B; }
+    .badge-red   { background: #FCEBEB; color: #A32D2D; }
+
+    /* ── Heatmap ── */
+    .heatmap-grid {
+      display: grid;
+      grid-template-columns: 44px repeat(7, 1fr);
+      gap: 3px;
+      font-size: 10px;
+    }
+    .hm-label {
+      color: #aaa;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+    }
+    .hm-label.row-label {
+      justify-content: flex-end;
+      padding-right: 6px;
+      font-size: 10px;
+    }
+    .hm-cell {
+      height: 30px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 500;
+      transition: transform 0.1s;
+      cursor: default;
+    }
+    .hm-cell:hover { transform: scale(1.08); z-index: 2; position: relative; }
+
+    /* ── Tips panel ── */
+    .tip-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 11px 0;
+      border-bottom: 0.5px solid rgba(0,0,0,0.06);
+    }
+    .tip-row:last-child { border-bottom: none; }
+    .tip-icon {
+      width: 30px; height: 30px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+    .tip-icon.green { background: #E1F5EE; }
+    .tip-icon.amber { background: #FAEEDA; }
+    .tip-icon.blue  { background: #E6F1FB; }
+    .tip-icon.red   { background: #FCEBEB; }
+    .tip-text {
+      font-size: 12.5px;
+      color: #666;
+      line-height: 1.55;
+    }
+    .tip-text strong { color: #1a1a18; font-weight: 500; }
+
+    /* ── Legend ── */
+    .legend {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: #888;
+    }
+    .legend-sq {
+      width: 10px; height: 10px;
+      border-radius: 2px;
+    }
+
+    /* ── Live price panel ── */
+    .live-panel {
+      background: #fff;
+      border: 0.5px solid rgba(0,0,0,0.08);
+      border-radius: 12px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 12px;
+    }
+    .live-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 1rem;
+    }
+    .live-title {
+      font-size: 12px;
+      font-weight: 500;
+      color: #999;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .live-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: #1D9E75;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+    .live-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .date-input {
+      height: 34px;
+      padding: 0 10px;
+      border-radius: 8px;
+      border: 0.5px solid rgba(0,0,0,0.15);
+      background: #fafaf8;
+      color: #1a1a18;
+      font-size: 13px;
+      font-family: 'DM Sans', sans-serif;
+      outline: none;
+    }
+    .date-input:focus { border-color: #1D9E75; }
+    .btn-live {
+      height: 34px;
+      padding: 0 18px;
+      background: #1a1a18;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+      white-space: nowrap;
+    }
+    .btn-live:hover { background: #333; }
+    .btn-live:active { transform: scale(0.97); }
+    .btn-live:disabled { background: #ccc; cursor: not-allowed; }
+    .live-results {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 10px;
+    }
+    .live-card {
+      border: 0.5px solid rgba(0,0,0,0.08);
+      border-radius: 10px;
+      padding: 12px 14px;
+      background: #fafaf8;
+      transition: box-shadow 0.15s;
+    }
+    .live-card:hover { box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
+    .live-card-spark {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 0.5px solid rgba(0,0,0,0.06);
+    }
+    .live-card-spark-title {
+      font-size: 11px;
+      color: #666;
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+    .live-card-spark-canvas-wrap {
+      position: relative;
+      width: 100%;
+      height: 130px;
+    }
+    .live-card-spark-label {
+      font-size: 10.5px;
+      color: #888;
+      margin-top: 6px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .live-card-spark-label .above { color: #A32D2D; }
+    .live-card-spark-label .below { color: #0F6E56; }
+    .live-results {
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    }
+    .live-card-airline {
+      font-size: 12px;
+      font-weight: 500;
+      color: #1a1a18;
+      margin-bottom: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .live-card-price {
+      font-size: 22px;
+      font-weight: 500;
+      color: #1D9E75;
+      margin-bottom: 4px;
+    }
+    .live-card-detail {
+      font-size: 11px;
+      color: #aaa;
+      line-height: 1.5;
+    }
+    .live-card-stops {
+      display: inline-block;
+      font-size: 10px;
+      padding: 2px 7px;
+      border-radius: 99px;
+      background: #E1F5EE;
+      color: #0F6E56;
+      margin-top: 4px;
+      font-weight: 500;
+    }
+    .live-card-stops.has-stops {
+      background: #FAEEDA;
+      color: #854F0B;
+    }
+    .live-compare {
+      margin-top: 10px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+    .live-compare.good { background: #E1F5EE; color: #0F6E56; }
+    .live-compare.warn { background: #FAEEDA; color: #854F0B; }
+    .live-compare.neutral { background: #f1f0ec; color: #666; }
+    .live-empty {
+      font-size: 13px;
+      color: #aaa;
+      text-align: center;
+      padding: 1.5rem 0;
+    }
+    .live-error {
+      font-size: 13px;
+      color: #A32D2D;
+      background: #FCEBEB;
+      border-radius: 8px;
+      padding: 10px 14px;
+    }
+    .spinner {
+      display: inline-block;
+      width: 16px; height: 16px;
+      border: 2px solid rgba(29,158,117,0.2);
+      border-top-color: #1D9E75;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Responsive ── */
+    @media (max-width: 900px) {
+      .panels, .bottom-panels { grid-template-columns: 1fr; }
+      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 520px) {
+      .main { padding: 1rem; }
+      .metrics { grid-template-columns: 1fr 1fr; }
+      .navbar { padding: 0 1rem; }
+      .route-bar { flex-direction: column; align-items: flex-start; }
+      .btn-analyze { margin-left: 0; width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+<nav class="navbar">
+  <div class="brand">flight<span>lens</span></div>
+  <div class="nav-tag">Chicago Flight Price Analyzer</div>
+</nav>
+
+<main class="main">
+
+  <!-- Route selector -->
+  <div class="route-bar">
+    <label>From</label>
+    <select class="sel" id="originSel">
+      <option value="LAX">LAX — Los Angeles</option>
+      <option value="JFK">JFK — New York</option>
+      <option value="MIA">MIA — Miami</option>
+      <option value="SFO">SFO — San Francisco</option>
+      <option value="BOS">BOS — Boston</option>
+      <option value="ATL">ATL — Atlanta</option>
+      <option value="DFW">DFW — Dallas</option>
+      <option value="DEN">DEN — Denver</option>
+      <option value="EWR">EWR — Newark</option>
+      <option value="PHL">PHL — Philadelphia</option>
+      <option value="DTW">DTW — Detroit</option>
+      <option value="LGA">LGA — New York (LaGuardia)</option>
+      <option value="IAD">IAD — Washington D.C.</option>
+      <option value="OAK">OAK — Oakland</option>
+      <option value="CLT">CLT — Charlotte</option>
+    </select>
+    <span class="arrow-icon">⇄</span>
+    <label>To/From</label>
+    <select class="sel" style="background:#E1F5EE; color:#0F6E56; border-color:#9FE1CB;" disabled>
+      <option>ORD — Chicago O'Hare</option>
+    </select>
+    <select class="sel" id="dirSel">
+      <option value="to" selected>To Chicago only</option>
+    </select>
+    <button class="btn-analyze" onclick="updateDashboard()">Analyze route</button>
+  </div>
+
+  <!-- Metric cards -->
+  <div class="metrics">
+    <div class="metric">
+      <div class="metric-label">Avg. total fare</div>
+      <div class="metric-value" id="m-avgfare">$287</div>
+      <div class="metric-sub" id="m-route">LAX ↔ ORD</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Best booking window</div>
+      <div class="metric-value good" id="m-window">21–35 days</div>
+      <div class="metric-sub">before departure</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Cheapest day to fly</div>
+      <div class="metric-value good" id="m-day">Tuesday</div>
+      <div class="metric-sub" id="m-dayfare">avg. $241</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Cheapest month</div>
+      <div class="metric-value warn" id="m-month">September</div>
+      <div class="metric-sub" id="m-monthfare">avg. $254</div>
+    </div>
+  </div>
+
+  <!-- Main panels -->
+  <div class="panels">
+    <!-- Fare curve chart -->
+    <div class="card">
+      <div class="card-title" id="chartTitle">Avg. fare vs. days booked in advance — LAX → ORD</div>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-sq" style="background:#1D9E75;"></div>Avg. fare</div>
+        <div class="legend-item"><div class="legend-sq" style="background:#9FE1CB;border:1.5px dashed #1D9E75;"></div>Sweet spot (best window)</div>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="fareChart" role="img" aria-label="Line chart showing average fare vs days booked in advance. Prices are highest last-minute and very far in advance, with a sweet spot around 21-35 days.">Fare is cheapest when booked 21–35 days in advance.</canvas>
+      </div>
+    </div>
+
+    <!-- Airline breakdown -->
+    <div class="card">
+      <div class="card-title">Avg. fare by airline</div>
+      <div id="airlineList"></div>
+    </div>
+  </div>
+
+  <!-- Bottom panels -->
+  <div class="bottom-panels">
+    <!-- Heatmap -->
+    <div class="card">
+      <div class="card-title">Fare heatmap — day of week × month</div>
+      <div class="heatmap-grid" id="heatmap"></div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:12px;">
+        <span style="font-size:10px;color:#aaa;">Cheaper</span>
+        <div style="flex:1;height:6px;border-radius:3px;background:linear-gradient(to right,#1D9E75,#f5f4f0,#D85A30);"></div>
+        <span style="font-size:10px;color:#aaa;">More expensive</span>
+      </div>
+    </div>
+
+    <!-- Insights -->
+    <div class="card">
+      <div class="card-title">Key insights</div>
+      <div id="insightsList"></div>
+    </div>
+  </div>
+
+
+  <!-- Live price lookup -->
+  <div class="live-panel" style="margin-top:12px;">
+    <div class="live-panel-header">
+      <div class="live-title">
+        <div class="live-dot"></div>
+        Live price lookup — Sky Scrapper API
+      </div>
+      <div class="live-controls">
+        <label style="font-size:12px;color:#999;">Departure date</label>
+        <input type="date" class="date-input" id="liveDateInput" />
+        <label style="font-size:12px;color:#999;">Cabin</label>
+        <select class="sel" id="liveCabin" style="height:34px;">
+          <option value="economy">Economy</option>
+          <option value="premium_economy">Premium Economy</option>
+          <option value="business">Business</option>
+          <option value="first">First</option>
+        </select>
+        <button class="btn-live" id="liveBtn" onclick="fetchLivePrices()">Check live prices</button>
+      </div>
+    </div>
+    <div id="liveResults">
+      <div class="live-empty">Select a departure date above and click "Check live prices" to see real-time fares for this route.</div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+// ── Model API config ──
+const MODEL_API_URL = 'http://localhost:8000/predict';
+
+// Latest model response for the current route — used by renderLiveResults
+// to compare live prices against the model's avg fare / booking window.
+let lastModelData = null;
+
+const daysLabels = ['1d','3d','7d','14d','21d','28d','35d','42d','56d','70d','90d','120d'];
+const sweetSpotIdx = [4, 5, 6]; // indices of 21d, 28d, 35d
+
+const months    = ['Apr','May','Jun','Jul','Aug','Sep','Oct'];
+const weekdays  = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
+// ── Chart instance ──
+let fareChartInstance = null;
+
+function buildFareChart(origin, fares) {
+  const ctx = document.getElementById('fareChart');
+  if (fareChartInstance) fareChartInstance.destroy();
+
+  const pointColors = fares.map((_, i) => sweetSpotIdx.includes(i) ? '#1D9E75' : '#9FE1CB');
+  const pointSizes  = fares.map((_, i) => sweetSpotIdx.includes(i) ? 6 : 3);
+
+  fareChartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: daysLabels,
+      datasets: [{
+        label: 'Avg fare ($)',
+        data: fares,
+        borderColor: '#1D9E75',
+        backgroundColor: 'rgba(29,158,117,0.07)',
+        borderWidth: 2.5,
+        pointRadius: pointSizes,
+        pointBackgroundColor: pointColors,
+        pointBorderColor: pointColors,
+        tension: 0.42,
+        fill: true,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ' $' + ctx.parsed.y + ' avg fare',
+            title: ctx => ctx[0].label + ' before departure'
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(0,0,0,0.05)' },
+          ticks: { font: { size: 11, family: 'DM Sans' }, color: '#aaa', autoSkip: false, maxRotation: 0 }
+        },
+        y: {
+          min: 150,
+          grid: { color: 'rgba(0,0,0,0.05)' },
+          ticks: {
+            font: { size: 11, family: 'DM Sans' },
+            color: '#aaa',
+            callback: v => '$' + v
+          }
+        }
+      }
+    }
+  });
+}
+
+function buildHeatmapFromModel(matrix) {
+  const hm = document.getElementById('heatmap');
+  hm.innerHTML = '';
+  hm.innerHTML += '<div class="hm-label"></div>' + months.map(m => `<div class="hm-label">${m}</div>`).join('');
+
+  const allVals = matrix.flat();
+  const minV = Math.min(...allVals), maxV = Math.max(...allVals);
+  const range = maxV - minV || 1;
+
+  weekdays.forEach((wd, wi) => {
+    hm.innerHTML += `<div class="hm-label row-label">${wd}</div>`;
+    months.forEach((_, mi) => {
+      const v = Math.round(matrix[wi][mi]);
+      const t = (v - minV) / range;
+      let r, g, b;
+      if (t < 0.5) {
+        const s = t * 2;
+        r = Math.round(29  + s * (245 - 29));
+        g = Math.round(158 + s * (244 - 158));
+        b = Math.round(117 + s * (229 - 117));
+      } else {
+        const s = (t - 0.5) * 2;
+        r = Math.round(245 + s * (216 - 245));
+        g = Math.round(244 + s * (90  - 244));
+        b = Math.round(229 + s * (48  - 229));
+      }
+      const textColor = t > 0.65 ? '#fff' : (t < 0.25 ? '#0F6E56' : '#555');
+      hm.innerHTML += `<div class="hm-cell" style="background:rgb(${r},${g},${b});color:${textColor};" title="${wd} in ${months[mi]}: $${v}">$${v}</div>`;
+    });
+  });
+}
+
+function buildAirlines(airlines) {
+  const list = document.getElementById('airlineList');
+  const sorted = [...airlines].sort((a, b) => a.fare - b.fare);
+  const dotColors = { 'badge-green':'#1D9E75', 'badge-amber':'#BA7517', 'badge-red':'#E24B4A' };
+  list.innerHTML = sorted.map(a => `
+    <div class="airline-row">
+      <div class="airline-name">
+        <div class="airline-dot" style="background:${dotColors[a.cls]};"></div>
+        ${a.name}
+      </div>
+      <span class="badge ${a.cls}">$${a.fare}</span>
+    </div>
+  `).join('');
+}
+
+function buildInsights(d, origin) {
+  const insights = [
+    { icon:'✓', cls:'green', html:`<strong>Sweet spot: book ${d.window} out.</strong> This window saves an average of $${Math.round(d.avgFare - d.cheapDayFare + 40)} vs. booking within 7 days on this route.` },
+    { icon:'!', cls:'amber', html:`<strong>Avoid booking 90+ days early.</strong> Early fares on ${origin}–ORD are priced high before the airline adjusts for demand.` },
+    { icon:'✓', cls:'green', html:`<strong>Fly on ${d.cheapDay}.</strong> Mid-week departures average $${d.cheapDayFare} — one of the cheapest combinations on this route.` },
+    { icon:'↗', cls:'blue',  html:`<strong>${d.cheapMonth} is the cheapest month</strong> for this route at an average of $${d.cheapMonthFare}. Summer (Jun–Aug) tends to spike fares significantly.` },
+  ];
+  document.getElementById('insightsList').innerHTML = insights.map(i => `
+    <div class="tip-row">
+      <div class="tip-icon ${i.cls}">${i.icon}</div>
+      <div class="tip-text">${i.html}</div>
+    </div>
+  `).join('');
+}
+
+async function updateDashboard() {
+  const origin = document.getElementById('originSel').value;
+  const dir    = document.getElementById('dirSel').value;
+
+  const dirLabel = dir === 'to' ? `${origin} → ORD` : dir === 'from' ? `ORD → ${origin}` : `${origin} ↔ ORD`;
+  document.getElementById('m-route').textContent    = dirLabel;
+  document.getElementById('m-avgfare').textContent  = '…';
+  document.getElementById('chartTitle').textContent = `Avg. fare vs. days booked in advance — ${dirLabel}`;
+
+  try {
+    const response = await fetch(MODEL_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ origin, destination: 'ORD' })
+    });
+    if (!response.ok) throw new Error('Model API ' + response.status);
+    const d = await response.json();
+    lastModelData = d;
+
+    document.getElementById('m-avgfare').textContent   = '$' + d.avgFare;
+    document.getElementById('m-window').textContent    = d.window;
+    document.getElementById('m-day').textContent       = d.cheapDay;
+    document.getElementById('m-dayfare').textContent   = 'avg. $' + d.cheapDayFare;
+    document.getElementById('m-month').textContent     = d.cheapMonth;
+    document.getElementById('m-monthfare').textContent = 'avg. $' + d.cheapMonthFare;
+
+    buildFareChart(origin, d.fares);
+    buildHeatmapFromModel(d.heatmap);
+    buildAirlines(d.airlines);
+    buildInsights(d, origin);
+  } catch (err) {
+    document.getElementById('m-avgfare').textContent = 'Error';
+    console.error('Model fetch failed:', err);
+  }
+}
+
+// Init on load
+updateDashboard();
+
+// Days-booked-ahead grid that the model returns (mirror of BOOKING_WINDOWS in infer.py).
+const BOOKING_WINDOWS = [1, 3, 7, 14, 21, 28, 35, 42, 56, 70, 90, 120];
+
+// Tracks per-card Chart.js instances so we can destroy them on re-render.
+let liveSparkCharts = [];
+
+function _interpCurveJS(pts, d) {
+  if (!pts.length) return 0;
+  if (d <= pts[0].daysOut) return pts[0].price;
+  if (d >= pts[pts.length-1].daysOut) return pts[pts.length-1].price;
+  for (let i = 0; i < pts.length - 1; i++) {
+    if (d >= pts[i].daysOut && d <= pts[i+1].daysOut) {
+      const t = (Math.log(d) - Math.log(pts[i].daysOut)) / (Math.log(pts[i+1].daysOut) - Math.log(pts[i].daysOut));
+      return pts[i].price + t * (pts[i+1].price - pts[i].price);
+    }
+  }
+  return pts[pts.length-1].price;
+}
+
+// HTML placeholder for a per-itinerary chart. The Chart.js instance is
+// created later by instantiateSparkCharts() once the canvas is in the DOM.
+function buildSparkline(curve, userDaysOut, livePrice, _rawCurve, idx) {
+  if (!Array.isArray(curve) || curve.length < 2) return '';
+
+  const predictedAtUser      = _interpCurveJS(curve, userDaysOut);
+  const predictedAtDeparture = curve[0].price;
+  const trend = Math.round(predictedAtDeparture - predictedAtUser);
+
+  let trendLabel;
+  if (trend > 5)       trendLabel = `<span class="above">↑ $${trend} by departure</span>`;
+  else if (trend < -5) trendLabel = `<span class="below">↓ $${Math.abs(trend)} by departure</span>`;
+  else                 trendLabel = `<span>flat to departure</span>`;
+
+  return `
+    <div class="live-card-spark">
+      <div class="live-card-spark-title">Predicted price vs days before departure</div>
+      <div class="live-card-spark-canvas-wrap">
+        <canvas id="spark-${idx}" role="img" aria-label="Predicted fare curve over days before departure"></canvas>
+      </div>
+      <div class="live-card-spark-label">
+        <span>Forecast now: $${Math.round(predictedAtUser)}</span>
+        ${trendLabel}
+      </div>
+    </div>`;
+}
+
+// Wire up Chart.js instances after card HTML has been inserted into the DOM.
+function instantiateSparkCharts(curves, userDaysOut) {
+  // Tear down previous charts
+  liveSparkCharts.forEach(c => { try { c.destroy(); } catch {} });
+  liveSparkCharts = [];
+
+  curves.forEach((c, i) => {
+    const canvas = document.getElementById(`spark-${i}`);
+    if (!canvas || !c?.anchoredCurve?.length) return;
+
+    // Reverse so x-axis reads left→right as time flows toward departure:
+    // furthest-out booking on the left (120d), departure day on the right (1d).
+    const points = [...c.anchoredCurve].reverse();   // [{daysOut, price}, ...]
+
+    // Highlight the point closest to the user's days-out
+    let nearestIdx = 0;
+    let nearestDist = Infinity;
+    points.forEach((p, idx) => {
+      const d = Math.abs(p.daysOut - userDaysOut);
+      if (d < nearestDist) { nearestDist = d; nearestIdx = idx; }
+    });
+    const pointRadii  = points.map((_, idx) => idx === nearestIdx ? 5 : 2.5);
+    const pointColors = points.map((_, idx) => idx === nearestIdx ? '#1D9E75' : '#9FE1CB');
+
+    const labels = points.map(p => `${p.daysOut}d`);
+    const data   = points.map(p => Math.round(p.price));
+
+    liveSparkCharts.push(new Chart(canvas, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Forecast price',
+          data,
+          borderColor: '#1D9E75',
+          backgroundColor: 'rgba(29,158,117,0.08)',
+          borderWidth: 2,
+          pointRadius: pointRadii,
+          pointHoverRadius: 6,
+          pointBackgroundColor: pointColors,
+          pointBorderColor: pointColors,
+          tension: 0.35,
+          fill: true,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#1a1a18',
+            titleFont: { size: 11, family: 'DM Sans' },
+            bodyFont:  { size: 11, family: 'DM Sans' },
+            padding: 8,
+            displayColors: false,
+            callbacks: {
+              title: ctx => `${ctx[0].label} before departure`,
+              label: ctx => `Predicted: $${ctx.parsed.y}`,
+            },
+          },
+        },
+        scales: {
+          x: {
+            title: { display: true, text: 'Days before departure', font: { size: 10, family: 'DM Sans' }, color: '#888' },
+            grid:  { color: 'rgba(0,0,0,0.04)' },
+            ticks: { font: { size: 9, family: 'DM Sans' }, color: '#aaa', autoSkip: true, maxRotation: 0 },
+          },
+          y: {
+            title: { display: true, text: 'Price ($)', font: { size: 10, family: 'DM Sans' }, color: '#888' },
+            grid:  { color: 'rgba(0,0,0,0.04)' },
+            ticks: {
+              font: { size: 9, family: 'DM Sans' },
+              color: '#aaa',
+              callback: v => '$' + v,
+              maxTicksLimit: 5,
+            },
+          },
+        },
+      },
+    }));
+  });
+}
+
+// ── Sky Scrapper API Integration ──
+const RAPIDAPI_KEY = '58ac75ea42msh33fdab86b0fd62dp13fe6cjsn41ffaac78ce9';
+const RAPIDAPI_HOST = 'sky-scrapper.p.rapidapi.com';
+
+// Airport SkyId map (Sky Scrapper uses its own IDs).
+// Hardcoded fallback — used when localStorage has no override.
+const skyIds = {
+  LAX: { skyId: 'LAX', entityId: '27544008' },
+  JFK: { skyId: 'JFK', entityId: '27537542' },
+  MIA: { skyId: 'MIA', entityId: '27539488' },
+  SFO: { skyId: 'SFO', entityId: '27546920' },
+  BOS: { skyId: 'BOS', entityId: '27535398' },
+  ATL: { skyId: 'ATL', entityId: '27534630' },
+  DFW: { skyId: 'DFW', entityId: '27536544' },
+  DEN: { skyId: 'DEN', entityId: '27536476' },
+  EWR: { skyId: 'EWR', entityId: '27537746' },
+  PHL: { skyId: 'PHL', entityId: '27540830' },
+  DTW: { skyId: 'DTW', entityId: '27536726' },
+  LGA: { skyId: 'LGA', entityId: '27537896' },
+  IAD: { skyId: 'IAD', entityId: '27537290' },
+  OAK: { skyId: 'OAK', entityId: '27540414' },
+  CLT: { skyId: 'CLT', entityId: '27535972' },
+  ORD: { skyId: 'ORD', entityId: '27536542' },
+};
+
+// localStorage cache of verified entityIds. Once populated for an airport,
+// it overrides the hardcoded table above — survives page reloads.
+function _readSkyIdCache() {
+  try { return JSON.parse(localStorage.getItem('skyIdCache') || '{}'); }
+  catch { return {}; }
+}
+function _writeSkyIdCache(cache) {
+  localStorage.setItem('skyIdCache', JSON.stringify(cache));
+}
+
+// Default lookup: NEVER spends a quota query. Cache first, hardcoded fallback.
+function resolveSkyId(iata) {
+  const cache = _readSkyIdCache();
+  return cache[iata] || skyIds[iata];
+}
+
+// Explicit lookup via /searchAirport. Spends ONE quota query.
+// Run from DevTools console: forceResolveSkyId('ORD').then(console.log)
+async function forceResolveSkyId(iata) {
+  const url = `https://sky-scrapper.p.rapidapi.com/api/v1/flights/searchAirport?query=${encodeURIComponent(iata)}&locale=en-US`;
+  const r = await fetch(url, { headers: {
+    'x-rapidapi-host': RAPIDAPI_HOST,
+    'x-rapidapi-key':  RAPIDAPI_KEY,
+  }});
+  if (!r.ok) throw new Error(`searchAirport ${r.status}`);
+  const j = await r.json();
+  console.log('[searchAirport raw response]', j);
+
+  // Some responses put fields at the top level, others only inside
+  // navigation.relevantFlightParams. Try every known shape.
+  const pick = (d) => {
+    const nav = d?.navigation?.relevantFlightParams || {};
+    const skyId    = d?.skyId    || nav.skyId    || d?.presentation?.suggestionTitle?.match(/\(([A-Z]{3})\)/)?.[1];
+    const entityId = d?.entityId || nav.entityId || d?.navigation?.entityId;
+    const type     = d?.navigation?.entityType || nav.flightPlaceType;
+    return { skyId, entityId, type, raw: d };
+  };
+
+  const candidates = (j.data || []).map(pick).filter(c => c.skyId && c.entityId);
+  console.log('[candidates]', candidates);
+
+  const hit =
+    candidates.find(c => c.skyId === iata && c.type === 'AIRPORT') ||
+    candidates.find(c => c.skyId === iata) ||
+    candidates[0];
+
+  if (!hit || !hit.skyId || !hit.entityId) {
+    throw new Error(`No entityId found for ${iata} — see [searchAirport raw response] log above`);
+  }
+  const out = { skyId: hit.skyId, entityId: hit.entityId };
+  const cache = _readSkyIdCache();
+  cache[iata] = out;
+  _writeSkyIdCache(cache);
+  console.log(`Cached ${iata}:`, out, '(was hardcoded:', skyIds[iata], ')');
+  return out;
+}
+window.forceResolveSkyId = forceResolveSkyId;
+window.clearSkyIdCache = () => { localStorage.removeItem('skyIdCache'); console.log('skyIdCache cleared'); };
+
+function setLiveLoading(isLoading) {
+  const btn = document.getElementById('liveBtn');
+  const results = document.getElementById('liveResults');
+  if (isLoading) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Fetching...';
+    results.innerHTML = '<div class="live-empty"><span class="spinner"></span> Calling Sky Scrapper API for live prices...</div>';
+  } else {
+    btn.disabled = false;
+    btn.innerHTML = 'Check live prices';
+  }
+}
+
+async function fetchLivePrices() {
+  const origin    = document.getElementById('originSel').value;
+  const dir       = document.getElementById('dirSel').value;
+  const dateInput = document.getElementById('liveDateInput').value;
+  const cabin     = document.getElementById('liveCabin').value;
+  const results   = document.getElementById('liveResults');
+
+  if (!dateInput) {
+    results.innerHTML = '<div class="live-error">Please select a departure date first.</div>';
+    return;
+  }
+
+  // Determine origin/destination based on direction
+  const fromAirport = dir === 'from' ? 'ORD' : origin;
+  const toAirport   = dir === 'from' ? origin : 'ORD';
+
+  const fromSky = resolveSkyId(fromAirport);
+  const toSky   = resolveSkyId(toAirport);
+
+  setLiveLoading(true);
+
+  try {
+    const url = new URL('https://sky-scrapper.p.rapidapi.com/api/v2/flights/searchFlights');
+    url.searchParams.set('originSkyId',        fromSky.skyId);
+    url.searchParams.set('destinationSkyId',   toSky.skyId);
+    url.searchParams.set('originEntityId',     fromSky.entityId);
+    url.searchParams.set('destinationEntityId',toSky.entityId);
+    url.searchParams.set('date',               dateInput);
+    url.searchParams.set('cabinClass',         cabin);
+    url.searchParams.set('adults',             '1');
+    url.searchParams.set('sortBy',             'best');
+    url.searchParams.set('currency',           'USD');
+    url.searchParams.set('market',             'en-US');
+    url.searchParams.set('countryCode',        'US');
+
+    const headers = {
+      'x-rapidapi-host': RAPIDAPI_HOST,
+      'x-rapidapi-key':  RAPIDAPI_KEY,
+    };
+
+    const response = await fetch(url.toString(), { method: 'GET', headers });
+    if (!response.ok) {
+      throw new Error(`API returned status ${response.status}`);
+    }
+
+    let data = await response.json();
+    let ctx  = data?.data?.context;
+    const sid = ctx?.sessionId;
+
+    // Sky Scrapper runs the search asynchronously: the first response is
+    // almost always {context: {status: "incomplete"}, itineraries: []}.
+    // Poll /searchIncomplete with the sessionId until it completes.
+    if (sid && ctx?.status === 'incomplete') {
+      const pollUrl = new URL('https://sky-scrapper.p.rapidapi.com/api/v2/flights/searchIncomplete');
+      pollUrl.searchParams.set('sessionId', sid);
+      pollUrl.searchParams.set('currency',  'USD');
+
+      for (let i = 0; i < 6; i++) {
+        await new Promise(r => setTimeout(r, 2000));
+        const pr = await fetch(pollUrl.toString(), { method: 'GET', headers });
+        if (!pr.ok) break;
+        data = await pr.json();
+        ctx  = data?.data?.context;
+        const itinCount = data?.data?.itineraries?.length || 0;
+        if (ctx?.status !== 'incomplete' || itinCount > 0) break;
+      }
+    }
+
+    await renderLiveResults(data, fromAirport, toAirport, dateInput, origin);
+
+  } catch (err) {
+    results.innerHTML = `<div class="live-error">Could not fetch live prices: ${err.message}. Check your API key or try again shortly.</div>`;
+  } finally {
+    setLiveLoading(false);
+  }
+}
+
+async function renderLiveResults(data, fromAirport, toAirport, dateStr, origin) {
+  const results = document.getElementById('liveResults');
+
+  // Extract itineraries from Sky Scrapper response
+  const itineraries = data?.data?.itineraries || [];
+
+  if (!itineraries.length) {
+    results.innerHTML = '<div class="live-empty">No flights found for this route and date. Try a different date.</div>';
+    return;
+  }
+
+  // Take top 5 cheapest
+  const top = itineraries.slice(0, 5);
+  const modelAvg = lastModelData?.avgFare || 0;
+
+  // Days between today and the user's selected departure date.
+  const today = new Date(); today.setHours(0,0,0,0);
+  const dep   = new Date(dateStr);
+  const userDaysOut = Math.max(0, Math.round((dep - today) / 86400000));
+
+  // Extract per-itinerary attributes once so we can reuse for both API call and rendering
+  const cabin = document.getElementById('liveCabin').value;
+  const items = top.map(it => {
+    const leg       = it.legs?.[0] || {};
+    const priceNum  = parseFloat(it.price?.raw) || 0;
+    const stops     = leg.stopCount ?? 0;
+    const carrier   = leg.carriers?.marketing?.[0]?.name || 'United';
+    const depHourStr = (leg.departure || '').slice(11,13);
+    const depHour    = depHourStr ? parseInt(depHourStr, 10) : 12;
+    return {
+      origin: fromAirport,
+      destination: toAirport,
+      departure_date: dateStr,
+      departure_hour: depHour,
+      is_nonstop: stops === 0,
+      num_segments: Math.max(1, (stops|0) + 1),
+      duration_minutes: leg.durationInMinutes || null,
+      is_basic_economy: cabin === 'economy' && /basic/i.test(it.fareName || ''),
+      airline_name: carrier,
+      current_price: priceNum || null,
+    };
+  });
+
+  // Batch call to /predict_itineraries — one HTTP call for all cards
+  let curves = [];
+  try {
+    const resp = await fetch('http://localhost:8000/predict_itineraries', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items }),
+    });
+    if (resp.ok) {
+      const json = await resp.json();
+      curves = json.results || [];
+    }
+  } catch (e) {
+    console.warn('predict_itineraries failed, sparklines disabled:', e);
+  }
+
+  // Build flight cards
+  const cards = top.map((it, i) => {
+    const price     = it.price?.raw || it.price?.formatted || 'N/A';
+    const priceNum  = parseFloat(price) || 0;
+    const leg       = it.legs?.[0] || {};
+    const airline   = leg.carriers?.marketing?.[0]?.name || 'Unknown airline';
+    const stops     = leg.stopCount ?? '?';
+    const duration  = leg.durationInMinutes ? `${Math.floor(leg.durationInMinutes/60)}h ${leg.durationInMinutes%60}m` : '';
+    const depart    = leg.departure ? leg.departure.slice(11,16) : '';
+    const arrive    = leg.arrival   ? leg.arrival.slice(11,16)   : '';
+    const isNonStop = stops === 0;
+    const c = curves[i];
+    const sparkline = c ? buildSparkline(c.anchoredCurve, userDaysOut, priceNum, c.rawCurve, i) : '';
+
+    return `
+      <div class="live-card">
+        <div class="live-card-airline">${airline}</div>
+        <div class="live-card-price">$${priceNum > 0 ? Math.round(priceNum) : price}</div>
+        <div class="live-card-detail">${depart}${depart && arrive ? ' → ' : ''}${arrive}${duration ? ' &nbsp;·&nbsp; ' + duration : ''}</div>
+        <span class="live-card-stops ${isNonStop ? '' : 'has-stops'}">${isNonStop ? 'Nonstop' : stops + ' stop' + (stops > 1 ? 's' : '')}</span>
+        ${sparkline}
+      </div>
+    `;
+  }).join('');
+
+  // Comparison vs model prediction
+  const cheapestLive = parseFloat(top[0]?.price?.raw) || 0;
+  const modelWindow  = lastModelData?.window || 'N/A';
+  let compareHtml = '';
+  if (cheapestLive > 0 && modelAvg > 0) {
+    const diff = Math.round(cheapestLive - modelAvg);
+    const today = new Date();
+    const depDate = new Date(dateStr + 'T00:00:00');
+    const daysOut = Math.round((depDate - today) / (1000*60*60*24));
+    if (diff > 30) {
+      compareHtml = `<div class="live-compare warn">Live price ($${Math.round(cheapestLive)}) is <strong>$${diff} above</strong> the historical average ($${modelAvg}) for this route. Our model suggests the best window is <strong>${modelWindow}</strong> — you are ${daysOut} days out. Consider waiting.</div>`;
+    } else if (diff < -20) {
+      compareHtml = `<div class="live-compare good">Live price ($${Math.round(cheapestLive)}) is <strong>$${Math.abs(diff)} below</strong> the historical average ($${modelAvg}). This looks like a good deal — consider booking now!</div>`;
+    } else {
+      compareHtml = `<div class="live-compare neutral">Live price ($${Math.round(cheapestLive)}) is close to the historical average ($${modelAvg}) for this route. You are ${daysOut} days out. Model's best booking window is <strong>${modelWindow}</strong>.</div>`;
+    }
+  }
+
+  results.innerHTML = `
+    <div class="live-results">${cards}</div>
+    ${compareHtml}
+    <div style="font-size:11px;color:#ccc;margin-top:8px;text-align:right;">Data via Sky Scrapper API · ${fromAirport} → ${toAirport} · ${dateStr}</div>
+  `;
+
+  // Now that the canvases are in the DOM, instantiate Chart.js per card.
+  if (curves.length) instantiateSparkCharts(curves, userDaysOut);
+}
+
+// Set default date to 30 days from today
+(function setDefaultDate() {
+  const d = new Date();
+  d.setDate(d.getDate() + 30);
+  const iso = d.toISOString().split('T')[0];
+  document.getElementById('liveDateInput').value = iso;
+  document.getElementById('liveDateInput').min = new Date().toISOString().split('T')[0];
+})();
+
+</script>
+</body>
+</html>

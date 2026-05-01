@@ -1,0 +1,16 @@
+{
+  "learning_rate": 0.04085269907038714,
+  "max_depth": 9,
+  "subsample": 0.6176263978043055,
+  "colsample_bytree": 0.5551459173312394,
+  "min_child_weight": 2,
+  "gamma": 1.85248293973278e-08,
+  "reg_alpha": 0.0001995539554706924,
+  "reg_lambda": 0.5990863228857825,
+  "objective": "reg:squarederror",
+  "tree_method": "hist",
+  "random_state": 42,
+  "verbosity": 0,
+  "n_estimators": 3000,
+  "early_stopping_rounds": 50
+}
