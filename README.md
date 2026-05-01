@@ -1,170 +1,321 @@
-# Flight Price Prediction — SIGAIDA Guided Project
+# FlightLens — SIGAIDA Guided Project
 
-Predict the price of a domestic US flight given how far in advance you search, the route, airline, and other booking characteristics. The model is trained on real Expedia search data scraped April–October 2022.
-
----
-
-## Problem Statement
-
-**Can we predict what a flight will cost based on when and how you search for it?**
-
-Specifically, the core research question is: *how does the number of days between your search date and the departure date affect the price you see?* Alongside that, we incorporate route, airline, number of stops, and seat scarcity to build a complete pricing model.
+An end-to-end flight price predictor for routes into Chicago O'Hare (ORD). XGBoost
+model trained on ~6M Expedia search records, served behind a FastAPI endpoint,
+and visualized in a browser dashboard with live prices from Sky Scrapper.
 
 ---
 
-## Dataset
+## What it does
 
-**Source:** [`dilwong/flightprices`](https://www.kaggle.com/datasets/dilwong/flightprices) on Kaggle (~6M rows, ~5.9 GB)
+- **Predicts flight prices** as a function of route, days-until-flight, airline,
+  cabin class, departure date, and other booking characteristics.
+- **Serves predictions** via a REST API (`POST /predict`, `POST /predict_itineraries`).
+- **Visualizes them** in a single-page dashboard: fare-vs-days curve, weekday-by-month
+  heatmap, airline breakdown, and per-flight predicted price trajectories.
+- **Pulls live fares** from the Sky Scrapper API (RapidAPI) and overlays each live
+  itinerary onto its model-predicted curve.
 
-The dataset was collected by scraping Expedia for US domestic flights across 16 major airports. Each row is one itinerary returned by one search on one day.
+---
 
-**Target variable:** `totalFare` — the all-in price in USD shown to the user.
+## Model
 
-Download it with:
+**Algorithm:** XGBoost (gradient-boosted trees) trained on log1p-transformed fares.
+
+**Best model:** `results/xgboost_tuned.pkl` (selected via 50-trial Optuna sweep,
+then retrained with early stopping).
+
+| | |
+|---|---|
+| Total trees | 1143 (`best_iteration` = 1092) |
+| `n_estimators` cap | 3000 |
+| `early_stopping_rounds` | 50 |
+| `learning_rate` | 0.0409 |
+| `max_depth` | 9 |
+| `subsample` | 0.618 |
+| `colsample_bytree` | 0.555 |
+| `min_child_weight` | 2 |
+| `reg_lambda` | 0.599 |
+| `tree_method` | `hist` |
+
+**Test set performance** (last 20% of data, chronologically held out):
+
+| Metric | Value |
+|---|---|
+| MAE | $41.52 |
+| RMSE | $70.27 |
+| R² (log space) | 0.8292 |
+| R² (dollars) | 0.8111 |
+| MAPE | 16.84% |
+
+**Top features** by importance: `isBasicEconomy` (0.21), `be_x_days` (0.19),
+`isNonStop` (0.10), `num_segments` (0.09), `route` (0.08). Full list in
+`model_results.md`.
+
+22 engineered + raw features total. See `data/features.txt` for the order
+the model expects, and `infer.py:130` (`build_features`) for how each is
+computed.
+
+---
+
+## Quickstart — run the dashboard
+
+The fastest path: use the pre-trained model that's already in `results/` and
+just start the API + serve the HTML.
+
+### 1. Install Python deps
+
+```bash
+uv sync
+```
+
+(Uses `pyproject.toml`. If you don't have `uv`, install it from https://docs.astral.sh/uv/.)
+
+### 2. Start the model API
+
+```bash
+uv run uvicorn model_api:app --host 0.0.0.0 --port 8000 --reload
+```
+
+Verify it's up:
+
+```bash
+curl http://localhost:8000/health
+# {"status":"ok","model_loaded":true}
+```
+
+### 3. Get a RapidAPI key for Sky Scrapper (free)
+
+The dashboard's "Live price lookup" panel uses Sky Scrapper. The key in
+`flight_dashboard.html:761` is a placeholder — replace it with your own.
+
+1. Sign up at https://rapidapi.com
+2. Subscribe to https://rapidapi.com/apiheya/api/sky-scrapper (Basic plan, $0/month, ~20 requests/month)
+3. From any endpoint's **Code Snippets** panel, copy the `x-rapidapi-key` value
+4. Paste it into `flight_dashboard.html`:
+   ```js
+   const RAPIDAPI_KEY = 'YOUR_KEY_HERE';
+   ```
+
+### 4. Serve the dashboard
+
+`flight_dashboard.html` must be served over HTTP (not opened as a `file://`
+URL — browsers block `fetch()` from `file://`). Easiest:
+
+```bash
+python -m http.server 5500
+```
+
+Then open http://localhost:5500/flight_dashboard.html.
+
+### 5. Use it
+
+- Pick an origin airport from the top bar → click **Analyze route**. The metric
+  cards, chart, heatmap, airline list, and insights all populate from the
+  trained model.
+- In the bottom panel, pick a date and click **Check live prices**. The dashboard
+  hits Sky Scrapper for real itineraries, then asks the model for a per-flight
+  predicted-price curve anchored to each live price.
+
+If a route returns no results, retry — Sky Scrapper occasionally returns empty
+on the free tier. To verify an airport's entityId, open DevTools and run
+`forceResolveSkyId('ORD')` (each call uses 1 request, then caches the result).
+
+---
+
+## Retraining from scratch
+
+Skip this section if you only want to use the existing model.
+
+### 1. Install deps
+
+Same as quickstart step 1.
+
+### 2. Download the dataset
+
+The full Expedia dataset is ~5.9 GB (6M rows). You'll need a Kaggle account
+and API token (`~/.kaggle/kaggle.json` or `KAGGLE_USERNAME` / `KAGGLE_KEY` env vars).
+
 ```bash
 uv run python data.py
 ```
 
----
-
-## Features
-
-The model uses 14 engineered and raw features:
-
-| Feature | Type | Description |
-|---|---|---|
-| `days_until_flight` | Engineered | `flightDate - searchDate` — the single most important signal |
-| `startingAirport` | Categorical | Origin airport code (label-encoded) |
-| `destinationAirport` | Categorical | Destination airport code (label-encoded) |
-| `isNonStop` | Binary | 1 if the flight has no layovers |
-| `isBasicEconomy` | Binary | 1 if the fare is basic economy (typically cheapest) |
-| `isRefundable` | Binary | 1 if the ticket is refundable (typically most expensive) |
-| `seatsRemaining` | Numeric | Number of seats left — low seats = scarcity pricing |
-| `departure_month` | Engineered | Month of the flight (captures seasonality) |
-| `departure_day_of_week` | Engineered | Day of week of departure (Tue/Wed tend to be cheaper) |
-| `search_day_of_week` | Engineered | Day of week the search was performed |
-| `num_segments` | Engineered | Number of flight legs (from `\|\|` separators in segment data) |
-| `trip_duration_minutes` | Engineered | Total travel time parsed from ISO 8601 `travelDuration` |
-| `totalTravelDistance` | Numeric | Total route distance in miles (missing values imputed by route median) |
-| `primary_airline` | Categorical | First-leg airline; top 10 kept, rest grouped as "Other" (label-encoded) |
-
-**Dropped features:** `baseFare` (direct leakage), `legId` (identifier), `elapsedDays` (no variance), all redundant segment epoch/raw time columns, `segmentsCabinCode`, `segmentsDistance`, `fareBasisCode`, and `segmentsAirlineCode`.
-
----
-
-## How It Works
-
-### 1. Preprocessing (`preprocess.py`)
-
-1. Loads up to 500k rows from the CSV (set `FULL_DATA=1` to use all ~6M)
-2. Drops rows with missing `totalFare`
-3. Engineers all temporal features from `searchDate` and `flightDate`
-4. Parses `travelDuration` (ISO 8601 format like `PT5H30M`) into total minutes
-5. Counts `||`-delimited segments to get `num_segments`
-6. Extracts the first-leg airline from `segmentsAirlineName`, keeps top 10, labels the rest "Other"
-7. Imputes missing `totalTravelDistance` with the per-route median
-8. Label-encodes `startingAirport`, `destinationAirport`, and `primary_airline`
-9. **Log1p-transforms `totalFare`** — flight prices are right-skewed; predicting in log space improves model fit and penalizes large errors proportionally
-10. **Temporal train/test split (80/20)** — the first 80% of rows (earlier search dates) are training data, the last 20% are the test set. This is intentional: a random split would leak future pricing patterns into training.
-
-Outputs saved to `data/`: `X_train.csv`, `X_test.csv`, `y_train.csv`, `y_test.csv`, `features.txt`
-
-### 2. Model (`train_model.py`)
-
-**Algorithm: XGBoost (Gradient Boosted Decision Trees)**
-
-XGBoost works by sequentially building an ensemble of decision trees where each new tree corrects the residual errors of the previous ones. It's the standard choice for tabular regression problems like this because:
-- Handles mixed feature types (numeric, binary, encoded categorical) natively
-- Robust to outliers and skewed distributions
-- Captures nonlinear interactions (e.g. price jumps when seats drop below 3)
-- Fast on large datasets with `tree_method="hist"`
-
-**Hyperparameters used:**
-```
-n_estimators     = 500      # number of trees
-learning_rate    = 0.05     # how much each tree contributes
-max_depth        = 7        # maximum tree depth
-subsample        = 0.8      # fraction of rows per tree (reduces overfitting)
-colsample_bytree = 0.8      # fraction of features per tree (reduces overfitting)
-objective        = reg:squarederror  # minimizes MSE in log space
-```
-
-The model trains on log1p-transformed fares and predictions are converted back to dollars with `expm1()` for evaluation.
-
-### 3. Evaluation
-
-Metrics are computed on the held-out test set (last 20% of data by date):
-
-| Metric | Current | Target |
-|---|---|---|
-| MAE | $80.72 | < $20 |
-| RMSE | $142.49 | < $30 |
-| R² (log scale) | 0.752 | > 0.92 |
-| R² (dollar scale) | 0.660 | > 0.92 |
-| MAPE | 22.03% | < 10% |
-
-**Why the gap from targets?** The current run uses only 500k of ~6M available rows, and the sample only covers April–June 2022 (limited seasonality signal). Training on the full dataset is expected to significantly close this gap.
-
----
-
-## Running the Project
-
-### 1. Install dependencies
-```bash
-uv add kagglehub pandas numpy scikit-learn xgboost matplotlib seaborn tabulate optuna
-```
-
-### 2. Preprocess (500k row sample — fast, for iteration)
-
-The dataset is downloaded automatically via `kagglehub` on first run (~5.9 GB).
-A Kaggle account is required. Run `kaggle` login or set `KAGGLE_USERNAME` / `KAGGLE_KEY` env vars.
+### 3. Filter to Chicago routes
 
 ```bash
+uv run python filter_chicago.py
+```
+
+Produces `data/chicago_itineraries.csv`.
+
+### 4. Preprocess
+
+```bash
+# 500k row sample (fast, for iteration)
 uv run python preprocess.py
+
+# OR full ~6M dataset (slower, more accurate)
+FULL_DATA=1 uv run python preprocess.py     # bash/zsh
+$env:FULL_DATA=1; uv run python preprocess.py   # PowerShell
 ```
 
-### 2a. Preprocess (full ~6M row dataset)
+Outputs splits to `data/`: `X_train.csv`, `X_test.csv`, `y_train.csv`, `y_test.csv`,
+`features.txt`. Uses an **80/20 temporal split** — first 80% by date for
+training, last 20% for test. Target encoding is fit on train only, applied to
+test, to avoid leakage.
 
-**PowerShell:**
-```powershell
-$env:FULL_DATA=1; uv run python preprocess.py
-```
+### 5. Train
 
-**bash/zsh (Mac/Linux):**
 ```bash
-FULL_DATA=1 uv run python preprocess.py
-```
-
-### 3. Train baseline model
-```bash
+# Baseline (default hyperparameters)
 uv run python train_model.py
-```
 
-### 4. Hyperparameter tuning (50 Optuna trials, ~10-15 min)
-
-Finds optimal XGBoost hyperparameters via Bayesian search, then retrains and evaluates the tuned model.
-
-```bash
+# OR Optuna-tuned (50 trials Bayesian search, ~10–15 min)
 uv run python tune_model.py
 ```
 
+Both write to `results/`. The tuned run also produces:
+- `xgboost_tuned.pkl` — the model the API serves
+- `best_params.json` — winning hyperparameter set
+- `feature_importance_tuned.png`, `optuna_history.png`, `pred_vs_actual.png` — plots
+- `model_results.md` — metrics summary
+
+### 6. Compare baseline vs tuned
+
+```bash
+uv run python compare_models.py
+```
+
 ---
 
-## Results
+## Architecture
 
-After training, outputs are saved to `results/`:
-- `xgboost_model.pkl` — baseline model
-- `xgboost_tuned.pkl` — hyperparameter-tuned model
-- `best_params.json` — best hyperparameters found by Optuna
-- `feature_importance.png` / `feature_importance_tuned.png` — feature importance plots
-- `pred_vs_actual.png` — predicted vs actual fare scatter plot
-- `optuna_history.png` — Optuna optimization history
-- `model_results.md` — full metrics comparison (baseline vs tuned)
+```
+                            ┌─────────────────────────┐
+                            │    flight_dashboard     │
+                            │       (browser)         │
+                            └──┬──────────────────┬───┘
+                               │                  │
+            ┌──────────────────┘                  └────────────────┐
+            ▼                                                       ▼
+  POST /predict                                          GET /searchFlights
+  POST /predict_itineraries                              GET /searchIncomplete
+            │                                                       │
+            ▼                                                       ▼
+  ┌───────────────────────┐                            ┌───────────────────────┐
+  │   model_api.py        │                            │   sky-scrapper        │
+  │   (FastAPI :8000)     │                            │   (RapidAPI)          │
+  └───────────┬───────────┘                            └───────────────────────┘
+              │
+              ▼
+  ┌───────────────────────┐
+  │   infer.py            │
+  │   build_features()    │
+  │   predict_route()     │
+  │   predict_itinerary() │
+  └───────────┬───────────┘
+              │
+              ▼
+  ┌───────────────────────┐
+  │ xgboost_tuned.pkl     │
+  └───────────────────────┘
+```
+
+| File | Role |
+|---|---|
+| `data.py` | Download Expedia dataset from Kaggle |
+| `filter_chicago.py` | Subset rows to ORD-related itineraries |
+| `preprocess.py` | Engineer features, target-encode, 80/20 temporal split |
+| `train_model.py` | Train baseline XGBoost |
+| `tune_model.py` | Optuna sweep + retrain best |
+| `retrain.py` | Retrain with a fixed param set |
+| `compare_models.py` | Side-by-side metrics for baseline vs tuned |
+| `infer.py` | Feature builder + prediction routines (used by the API) |
+| `model_api.py` | FastAPI server exposing `/predict`, `/predict_itineraries`, `/health` |
+| `flight_dashboard.html` | Single-page dashboard |
 
 ---
 
-## Next Steps
+## API reference
 
-- Add departure hour as a feature (parse from `segmentsDepartureTimeRaw`)
-- Target-encode `startingAirport` + `destinationAirport` as a combined route feature
-- Experiment with LightGBM (often faster and slightly better on high-cardinality categoricals)
+### `POST /predict`
+
+Route-level summary used to populate the main dashboard.
+
+**Request:**
+```json
+{ "origin": "LAX", "destination": "ORD" }
+```
+
+**Response:** `avgFare`, `window` (e.g. `"21–35 days"`), `cheapDay`, `cheapDayFare`,
+`cheapMonth`, `cheapMonthFare`, `fares` (12 values for booking windows
+`[1, 3, 7, 14, 21, 28, 35, 42, 56, 70, 90, 120]` days), `airlines`, `heatmap` (7×7).
+
+### `POST /predict_itineraries`
+
+Per-flight curves anchored to live prices. Used by the live-price cards.
+
+**Request:**
+```json
+{
+  "items": [
+    {
+      "origin": "LAX",
+      "destination": "ORD",
+      "departure_date": "2026-05-31",
+      "departure_hour": 12,
+      "is_nonstop": true,
+      "num_segments": 1,
+      "duration_minutes": 250,
+      "is_basic_economy": false,
+      "airline_name": "American",
+      "current_price": 420
+    }
+  ]
+}
+```
+
+**Response:** `results[].rawCurve` (model output, un-anchored),
+`results[].anchoredCurve` (multiplicatively scaled so it passes through
+`current_price` at today's days-out), plus `anchorScale`, `modelPriceAtNow`,
+and `todayDaysOut`.
+
+The *shape* of the curve comes from the model; the *level* is anchored to the
+live observed price. This is how the dashboard reconciles a static historical
+model with live market data without retraining.
+
+### `GET /health`
+
+```json
+{"status":"ok","model_loaded":true}
+```
+
+---
+
+## Troubleshooting
+
+- **`ERR_CONNECTION_REFUSED` on :8000** — model API isn't running. Start step 2.
+- **`fetch()` fails when opening HTML directly** — open via `http://` not `file://`.
+  Run `python -m http.server 5500`.
+- **Sky Scrapper returns 403** — you're not subscribed to the API on the account
+  whose key you're using. Subscribe to Basic (free) on the API page.
+- **Sky Scrapper returns 200 but empty `itineraries`** — either the route+date
+  has no flights, or the polling exited too early. Try a different date or click
+  again. Free tier (~20 requests/month) is also flaky.
+- **"No flights found" but model API works** — usually a Sky Scrapper quota issue.
+  Check rate-limit headers in DevTools Network tab.
+- **Wrong entityIds in `skyIds`** — the hardcoded table in `flight_dashboard.html`
+  is mostly *city*-level entityIds, not airports. To fix one, run
+  `forceResolveSkyId('ORD')` in DevTools console (1 request, cached after that).
+
+---
+
+## Notes / known limitations
+
+- The Sky Scrapper key is hardcoded in `flight_dashboard.html`. Anyone with
+  the file gets your quota. For anything beyond local demo, move the live-price
+  call server-side.
+- `seatsRemaining` and `total_travel_distance` aren't returned by Sky Scrapper —
+  the per-flight predictor falls back to training-set means for those.
+- The model was trained on April–October 2022 fares; predictions for routes
+  or seasons outside that range degrade.

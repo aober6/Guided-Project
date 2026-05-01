@@ -355,6 +355,114 @@ def predict_route(origin: str, destination: str = "ORD") -> dict:
     }
 
 
+def _interp_curve(curve_pts: list, days_out: float) -> float:
+    """Linear interp on log-x of a fare curve [{'daysOut': d, 'price': p}, ...]."""
+    if not curve_pts:
+        return 0.0
+    xs = [c["daysOut"] for c in curve_pts]
+    ys = [c["price"]   for c in curve_pts]
+    if days_out <= xs[0]:  return ys[0]
+    if days_out >= xs[-1]: return ys[-1]
+    for i in range(len(xs) - 1):
+        if xs[i] <= days_out <= xs[i + 1]:
+            t = (np.log(days_out) - np.log(xs[i])) / (np.log(xs[i + 1]) - np.log(xs[i]))
+            return ys[i] + t * (ys[i + 1] - ys[i])
+    return ys[-1]
+
+
+# Crude name normalization: Sky Scrapper carrier names -> the form the model knows.
+_CARRIER_NORMALIZE = {
+    "american": "American Airlines", "american airlines": "American Airlines",
+    "delta": "Delta", "delta air lines": "Delta",
+    "united": "United", "united airlines": "United",
+    "spirit": "Spirit Airlines", "spirit airlines": "Spirit Airlines",
+    "jetblue": "JetBlue Airways", "jetblue airways": "JetBlue Airways",
+    "alaska": "Alaska Airlines", "alaska airlines": "Alaska Airlines",
+    "southwest": "Southwest Airlines", "southwest airlines": "Southwest Airlines",
+    "frontier": "Frontier Airlines", "frontier airlines": "Frontier Airlines",
+    "allegiant": "Allegiant Air", "allegiant air": "Allegiant Air",
+}
+
+
+def predict_itinerary(
+    origin: str,
+    destination: str,
+    departure_date: str,        # ISO 'YYYY-MM-DD'
+    departure_hour: float = 12.0,
+    is_nonstop: bool = True,
+    num_segments: int = 1,
+    duration_minutes: float = None,
+    is_basic_economy: bool = False,
+    airline_name: str = "United",
+    current_price: float = None,
+) -> dict:
+    """
+    Per-itinerary fare curve over BOOKING_WINDOWS, optionally anchored
+    multiplicatively to the live `current_price` so that
+        anchored_curve(today_days_out) == current_price
+    while preserving the model's predicted shape.
+    """
+    from datetime import datetime, date
+
+    dep = datetime.fromisoformat(departure_date).date()
+    today = date.today()
+    today_days_out = max(0, (dep - today).days)
+
+    # Normalize carrier name to a form the target encoder knows
+    key = (airline_name or "").strip().lower()
+    primary_airline = _CARRIER_NORMALIZE.get(key, airline_name or "United")
+
+    # Sweep BOOKING_WINDOWS to get the model's raw curve
+    raw_curve = []
+    for d in BOOKING_WINDOWS:
+        df = build_features(
+            origin=origin, destination=destination,
+            days_until_flight=d,
+            departure_month=dep.month,
+            departure_day_of_week=dep.weekday(),
+            is_nonstop=int(bool(is_nonstop)),
+            is_basic_economy=int(bool(is_basic_economy)),
+            num_segments=num_segments,
+            trip_duration_minutes=duration_minutes,
+            primary_airline=primary_airline,
+            departure_hour=departure_hour,
+            search_day_of_week=today.weekday(),
+        )
+        raw_curve.append({"daysOut": d, "price": round(_predict_single(df), 2)})
+
+    # Anchor to live price (multiplicative scale on log-x interp)
+    anchored = [dict(p) for p in raw_curve]
+    scale = 1.0
+    if current_price and current_price > 0:
+        anchor_price = _interp_curve(raw_curve, max(today_days_out, BOOKING_WINDOWS[0]))
+        if anchor_price > 0:
+            scale = float(current_price) / anchor_price
+            for p in anchored:
+                p["price"] = round(p["price"] * scale, 2)
+
+    return {
+        "origin":            origin,
+        "destination":       destination,
+        "todayDaysOut":      today_days_out,
+        "departureDate":     departure_date,
+        "primaryAirline":    primary_airline,
+        "isNonStop":         bool(is_nonstop),
+        "currentPrice":      current_price,
+        "anchorScale":       round(scale, 4),
+        "modelPriceAtNow":   round(_interp_curve(raw_curve, max(today_days_out, BOOKING_WINDOWS[0])), 2),
+        "rawCurve":          raw_curve,
+        "anchoredCurve":     anchored,
+    }
+
+
+def predict_itineraries(items: list) -> list:
+    """Batch wrapper — accepts a list of itinerary dicts, returns a list of curves."""
+    out = []
+    for it in items:
+        out.append(predict_itinerary(**it))
+    return out
+
+
 # ── Quick smoke test ──────────────────────────────────────────────────────────
 if __name__ == "__main__":
     import json

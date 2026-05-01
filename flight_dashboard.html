@@ -366,6 +366,34 @@
       transition: box-shadow 0.15s;
     }
     .live-card:hover { box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
+    .live-card-spark {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 0.5px solid rgba(0,0,0,0.06);
+    }
+    .live-card-spark-title {
+      font-size: 11px;
+      color: #666;
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+    .live-card-spark-canvas-wrap {
+      position: relative;
+      width: 100%;
+      height: 130px;
+    }
+    .live-card-spark-label {
+      font-size: 10.5px;
+      color: #888;
+      margin-top: 6px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .live-card-spark-label .above { color: #A32D2D; }
+    .live-card-spark-label .below { color: #0F6E56; }
+    .live-results {
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    }
     .live-card-airline {
       font-size: 12px;
       font-weight: 500;
@@ -484,9 +512,7 @@
       <option>ORD — Chicago O'Hare</option>
     </select>
     <select class="sel" id="dirSel">
-      <option value="both">Both directions</option>
-      <option value="to">To Chicago only</option>
-      <option value="from">From Chicago only</option>
+      <option value="to" selected>To Chicago only</option>
     </select>
     <button class="btn-analyze" onclick="updateDashboard()">Analyze route</button>
   </div>
@@ -757,11 +783,143 @@ async function updateDashboard() {
 // Init on load
 updateDashboard();
 
+// Days-booked-ahead grid that the model returns (mirror of BOOKING_WINDOWS in infer.py).
+const BOOKING_WINDOWS = [1, 3, 7, 14, 21, 28, 35, 42, 56, 70, 90, 120];
+
+// Tracks per-card Chart.js instances so we can destroy them on re-render.
+let liveSparkCharts = [];
+
+function _interpCurveJS(pts, d) {
+  if (!pts.length) return 0;
+  if (d <= pts[0].daysOut) return pts[0].price;
+  if (d >= pts[pts.length-1].daysOut) return pts[pts.length-1].price;
+  for (let i = 0; i < pts.length - 1; i++) {
+    if (d >= pts[i].daysOut && d <= pts[i+1].daysOut) {
+      const t = (Math.log(d) - Math.log(pts[i].daysOut)) / (Math.log(pts[i+1].daysOut) - Math.log(pts[i].daysOut));
+      return pts[i].price + t * (pts[i+1].price - pts[i].price);
+    }
+  }
+  return pts[pts.length-1].price;
+}
+
+// HTML placeholder for a per-itinerary chart. The Chart.js instance is
+// created later by instantiateSparkCharts() once the canvas is in the DOM.
+function buildSparkline(curve, userDaysOut, livePrice, _rawCurve, idx) {
+  if (!Array.isArray(curve) || curve.length < 2) return '';
+
+  const predictedAtUser      = _interpCurveJS(curve, userDaysOut);
+  const predictedAtDeparture = curve[0].price;
+  const trend = Math.round(predictedAtDeparture - predictedAtUser);
+
+  let trendLabel;
+  if (trend > 5)       trendLabel = `<span class="above">↑ $${trend} by departure</span>`;
+  else if (trend < -5) trendLabel = `<span class="below">↓ $${Math.abs(trend)} by departure</span>`;
+  else                 trendLabel = `<span>flat to departure</span>`;
+
+  return `
+    <div class="live-card-spark">
+      <div class="live-card-spark-title">Predicted price vs days before departure</div>
+      <div class="live-card-spark-canvas-wrap">
+        <canvas id="spark-${idx}" role="img" aria-label="Predicted fare curve over days before departure"></canvas>
+      </div>
+      <div class="live-card-spark-label">
+        <span>Forecast now: $${Math.round(predictedAtUser)}</span>
+        ${trendLabel}
+      </div>
+    </div>`;
+}
+
+// Wire up Chart.js instances after card HTML has been inserted into the DOM.
+function instantiateSparkCharts(curves, userDaysOut) {
+  // Tear down previous charts
+  liveSparkCharts.forEach(c => { try { c.destroy(); } catch {} });
+  liveSparkCharts = [];
+
+  curves.forEach((c, i) => {
+    const canvas = document.getElementById(`spark-${i}`);
+    if (!canvas || !c?.anchoredCurve?.length) return;
+
+    // Reverse so x-axis reads left→right as time flows toward departure:
+    // furthest-out booking on the left (120d), departure day on the right (1d).
+    const points = [...c.anchoredCurve].reverse();   // [{daysOut, price}, ...]
+
+    // Highlight the point closest to the user's days-out
+    let nearestIdx = 0;
+    let nearestDist = Infinity;
+    points.forEach((p, idx) => {
+      const d = Math.abs(p.daysOut - userDaysOut);
+      if (d < nearestDist) { nearestDist = d; nearestIdx = idx; }
+    });
+    const pointRadii  = points.map((_, idx) => idx === nearestIdx ? 5 : 2.5);
+    const pointColors = points.map((_, idx) => idx === nearestIdx ? '#1D9E75' : '#9FE1CB');
+
+    const labels = points.map(p => `${p.daysOut}d`);
+    const data   = points.map(p => Math.round(p.price));
+
+    liveSparkCharts.push(new Chart(canvas, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Forecast price',
+          data,
+          borderColor: '#1D9E75',
+          backgroundColor: 'rgba(29,158,117,0.08)',
+          borderWidth: 2,
+          pointRadius: pointRadii,
+          pointHoverRadius: 6,
+          pointBackgroundColor: pointColors,
+          pointBorderColor: pointColors,
+          tension: 0.35,
+          fill: true,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#1a1a18',
+            titleFont: { size: 11, family: 'DM Sans' },
+            bodyFont:  { size: 11, family: 'DM Sans' },
+            padding: 8,
+            displayColors: false,
+            callbacks: {
+              title: ctx => `${ctx[0].label} before departure`,
+              label: ctx => `Predicted: $${ctx.parsed.y}`,
+            },
+          },
+        },
+        scales: {
+          x: {
+            title: { display: true, text: 'Days before departure', font: { size: 10, family: 'DM Sans' }, color: '#888' },
+            grid:  { color: 'rgba(0,0,0,0.04)' },
+            ticks: { font: { size: 9, family: 'DM Sans' }, color: '#aaa', autoSkip: true, maxRotation: 0 },
+          },
+          y: {
+            title: { display: true, text: 'Price ($)', font: { size: 10, family: 'DM Sans' }, color: '#888' },
+            grid:  { color: 'rgba(0,0,0,0.04)' },
+            ticks: {
+              font: { size: 9, family: 'DM Sans' },
+              color: '#aaa',
+              callback: v => '$' + v,
+              maxTicksLimit: 5,
+            },
+          },
+        },
+      },
+    }));
+  });
+}
+
 // ── Sky Scrapper API Integration ──
-const RAPIDAPI_KEY = 'cd78f9c3a9msha0c42cef2e65754p1d9c98jsn656cb9e52860';
+const RAPIDAPI_KEY = '58ac75ea42msh33fdab86b0fd62dp13fe6cjsn41ffaac78ce9';
 const RAPIDAPI_HOST = 'sky-scrapper.p.rapidapi.com';
 
-// Airport SkyId map (Sky Scrapper uses its own IDs)
+// Airport SkyId map (Sky Scrapper uses its own IDs).
+// Hardcoded fallback — used when localStorage has no override.
 const skyIds = {
   LAX: { skyId: 'LAX', entityId: '27544008' },
   JFK: { skyId: 'JFK', entityId: '27537542' },
@@ -780,6 +938,65 @@ const skyIds = {
   CLT: { skyId: 'CLT', entityId: '27535972' },
   ORD: { skyId: 'ORD', entityId: '27536542' },
 };
+
+// localStorage cache of verified entityIds. Once populated for an airport,
+// it overrides the hardcoded table above — survives page reloads.
+function _readSkyIdCache() {
+  try { return JSON.parse(localStorage.getItem('skyIdCache') || '{}'); }
+  catch { return {}; }
+}
+function _writeSkyIdCache(cache) {
+  localStorage.setItem('skyIdCache', JSON.stringify(cache));
+}
+
+// Default lookup: NEVER spends a quota query. Cache first, hardcoded fallback.
+function resolveSkyId(iata) {
+  const cache = _readSkyIdCache();
+  return cache[iata] || skyIds[iata];
+}
+
+// Explicit lookup via /searchAirport. Spends ONE quota query.
+// Run from DevTools console: forceResolveSkyId('ORD').then(console.log)
+async function forceResolveSkyId(iata) {
+  const url = `https://sky-scrapper.p.rapidapi.com/api/v1/flights/searchAirport?query=${encodeURIComponent(iata)}&locale=en-US`;
+  const r = await fetch(url, { headers: {
+    'x-rapidapi-host': RAPIDAPI_HOST,
+    'x-rapidapi-key':  RAPIDAPI_KEY,
+  }});
+  if (!r.ok) throw new Error(`searchAirport ${r.status}`);
+  const j = await r.json();
+  console.log('[searchAirport raw response]', j);
+
+  // Some responses put fields at the top level, others only inside
+  // navigation.relevantFlightParams. Try every known shape.
+  const pick = (d) => {
+    const nav = d?.navigation?.relevantFlightParams || {};
+    const skyId    = d?.skyId    || nav.skyId    || d?.presentation?.suggestionTitle?.match(/\(([A-Z]{3})\)/)?.[1];
+    const entityId = d?.entityId || nav.entityId || d?.navigation?.entityId;
+    const type     = d?.navigation?.entityType || nav.flightPlaceType;
+    return { skyId, entityId, type, raw: d };
+  };
+
+  const candidates = (j.data || []).map(pick).filter(c => c.skyId && c.entityId);
+  console.log('[candidates]', candidates);
+
+  const hit =
+    candidates.find(c => c.skyId === iata && c.type === 'AIRPORT') ||
+    candidates.find(c => c.skyId === iata) ||
+    candidates[0];
+
+  if (!hit || !hit.skyId || !hit.entityId) {
+    throw new Error(`No entityId found for ${iata} — see [searchAirport raw response] log above`);
+  }
+  const out = { skyId: hit.skyId, entityId: hit.entityId };
+  const cache = _readSkyIdCache();
+  cache[iata] = out;
+  _writeSkyIdCache(cache);
+  console.log(`Cached ${iata}:`, out, '(was hardcoded:', skyIds[iata], ')');
+  return out;
+}
+window.forceResolveSkyId = forceResolveSkyId;
+window.clearSkyIdCache = () => { localStorage.removeItem('skyIdCache'); console.log('skyIdCache cleared'); };
 
 function setLiveLoading(isLoading) {
   const btn = document.getElementById('liveBtn');
@@ -810,8 +1027,8 @@ async function fetchLivePrices() {
   const fromAirport = dir === 'from' ? 'ORD' : origin;
   const toAirport   = dir === 'from' ? origin : 'ORD';
 
-  const fromSky = skyIds[fromAirport];
-  const toSky   = skyIds[toAirport];
+  const fromSky = resolveSkyId(fromAirport);
+  const toSky   = resolveSkyId(toAirport);
 
   setLiveLoading(true);
 
@@ -829,20 +1046,40 @@ async function fetchLivePrices() {
     url.searchParams.set('market',             'en-US');
     url.searchParams.set('countryCode',        'US');
 
-    const response = await fetch(url.toString(), {
-      method: 'GET',
-      headers: {
-        'x-rapidapi-host': RAPIDAPI_HOST,
-        'x-rapidapi-key':  RAPIDAPI_KEY,
-      }
-    });
+    const headers = {
+      'x-rapidapi-host': RAPIDAPI_HOST,
+      'x-rapidapi-key':  RAPIDAPI_KEY,
+    };
 
+    const response = await fetch(url.toString(), { method: 'GET', headers });
     if (!response.ok) {
       throw new Error(`API returned status ${response.status}`);
     }
 
-    const data = await response.json();
-    renderLiveResults(data, fromAirport, toAirport, dateInput, origin);
+    let data = await response.json();
+    let ctx  = data?.data?.context;
+    const sid = ctx?.sessionId;
+
+    // Sky Scrapper runs the search asynchronously: the first response is
+    // almost always {context: {status: "incomplete"}, itineraries: []}.
+    // Poll /searchIncomplete with the sessionId until it completes.
+    if (sid && ctx?.status === 'incomplete') {
+      const pollUrl = new URL('https://sky-scrapper.p.rapidapi.com/api/v2/flights/searchIncomplete');
+      pollUrl.searchParams.set('sessionId', sid);
+      pollUrl.searchParams.set('currency',  'USD');
+
+      for (let i = 0; i < 6; i++) {
+        await new Promise(r => setTimeout(r, 2000));
+        const pr = await fetch(pollUrl.toString(), { method: 'GET', headers });
+        if (!pr.ok) break;
+        data = await pr.json();
+        ctx  = data?.data?.context;
+        const itinCount = data?.data?.itineraries?.length || 0;
+        if (ctx?.status !== 'incomplete' || itinCount > 0) break;
+      }
+    }
+
+    await renderLiveResults(data, fromAirport, toAirport, dateInput, origin);
 
   } catch (err) {
     results.innerHTML = `<div class="live-error">Could not fetch live prices: ${err.message}. Check your API key or try again shortly.</div>`;
@@ -851,7 +1088,7 @@ async function fetchLivePrices() {
   }
 }
 
-function renderLiveResults(data, fromAirport, toAirport, dateStr, origin) {
+async function renderLiveResults(data, fromAirport, toAirport, dateStr, origin) {
   const results = document.getElementById('liveResults');
 
   // Extract itineraries from Sky Scrapper response
@@ -866,8 +1103,52 @@ function renderLiveResults(data, fromAirport, toAirport, dateStr, origin) {
   const top = itineraries.slice(0, 5);
   const modelAvg = lastModelData?.avgFare || 0;
 
+  // Days between today and the user's selected departure date.
+  const today = new Date(); today.setHours(0,0,0,0);
+  const dep   = new Date(dateStr);
+  const userDaysOut = Math.max(0, Math.round((dep - today) / 86400000));
+
+  // Extract per-itinerary attributes once so we can reuse for both API call and rendering
+  const cabin = document.getElementById('liveCabin').value;
+  const items = top.map(it => {
+    const leg       = it.legs?.[0] || {};
+    const priceNum  = parseFloat(it.price?.raw) || 0;
+    const stops     = leg.stopCount ?? 0;
+    const carrier   = leg.carriers?.marketing?.[0]?.name || 'United';
+    const depHourStr = (leg.departure || '').slice(11,13);
+    const depHour    = depHourStr ? parseInt(depHourStr, 10) : 12;
+    return {
+      origin: fromAirport,
+      destination: toAirport,
+      departure_date: dateStr,
+      departure_hour: depHour,
+      is_nonstop: stops === 0,
+      num_segments: Math.max(1, (stops|0) + 1),
+      duration_minutes: leg.durationInMinutes || null,
+      is_basic_economy: cabin === 'economy' && /basic/i.test(it.fareName || ''),
+      airline_name: carrier,
+      current_price: priceNum || null,
+    };
+  });
+
+  // Batch call to /predict_itineraries — one HTTP call for all cards
+  let curves = [];
+  try {
+    const resp = await fetch('http://localhost:8000/predict_itineraries', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items }),
+    });
+    if (resp.ok) {
+      const json = await resp.json();
+      curves = json.results || [];
+    }
+  } catch (e) {
+    console.warn('predict_itineraries failed, sparklines disabled:', e);
+  }
+
   // Build flight cards
-  const cards = top.map(it => {
+  const cards = top.map((it, i) => {
     const price     = it.price?.raw || it.price?.formatted || 'N/A';
     const priceNum  = parseFloat(price) || 0;
     const leg       = it.legs?.[0] || {};
@@ -877,6 +1158,8 @@ function renderLiveResults(data, fromAirport, toAirport, dateStr, origin) {
     const depart    = leg.departure ? leg.departure.slice(11,16) : '';
     const arrive    = leg.arrival   ? leg.arrival.slice(11,16)   : '';
     const isNonStop = stops === 0;
+    const c = curves[i];
+    const sparkline = c ? buildSparkline(c.anchoredCurve, userDaysOut, priceNum, c.rawCurve, i) : '';
 
     return `
       <div class="live-card">
@@ -884,6 +1167,7 @@ function renderLiveResults(data, fromAirport, toAirport, dateStr, origin) {
         <div class="live-card-price">$${priceNum > 0 ? Math.round(priceNum) : price}</div>
         <div class="live-card-detail">${depart}${depart && arrive ? ' → ' : ''}${arrive}${duration ? ' &nbsp;·&nbsp; ' + duration : ''}</div>
         <span class="live-card-stops ${isNonStop ? '' : 'has-stops'}">${isNonStop ? 'Nonstop' : stops + ' stop' + (stops > 1 ? 's' : '')}</span>
+        ${sparkline}
       </div>
     `;
   }).join('');
@@ -911,6 +1195,9 @@ function renderLiveResults(data, fromAirport, toAirport, dateStr, origin) {
     ${compareHtml}
     <div style="font-size:11px;color:#ccc;margin-top:8px;text-align:right;">Data via Sky Scrapper API · ${fromAirport} → ${toAirport} · ${dateStr}</div>
   `;
+
+  // Now that the canvases are in the DOM, instantiate Chart.js per card.
+  if (curves.length) instantiateSparkCharts(curves, userDaysOut);
 }
 
 // Set default date to 30 days from today
